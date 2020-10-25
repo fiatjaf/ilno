@@ -5,6 +5,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"wrong.wang/x/go-isso/isso"
+	"wrong.wang/x/go-isso/lnurl"
 )
 
 func workInProcess(w http.ResponseWriter, r *http.Request) {
@@ -16,8 +17,11 @@ func ping(w http.ResponseWriter, r *http.Request) {
 }
 
 func registerRoute(router *mux.Router, isso *isso.ISSO) {
-	// single comment
+	router.HandleFunc("/lnurlauth", lnurl.Auth).Methods("GET").Name("lnurlauth")
+	router.HandleFunc("/lnurlauth/stream", lnurl.AuthStream).Methods("GET").Name("lnurlauthstream")
 	router.HandleFunc("/new", isso.CreateComment()).Queries("uri", "{uri}").Methods("POST").Name("new")
+
+	// single comment
 	router.HandleFunc("/id/{id:[0-9]+}", isso.ViewComment()).Methods("GET").Name("view")
 	router.HandleFunc("/id/{id:[0-9]+}", isso.EditComment()).Methods("PUT").Name("edit")
 	router.HandleFunc("/id/{id:[0-9]+}", isso.DeleteComment()).Methods("DELETE").Name("delete")

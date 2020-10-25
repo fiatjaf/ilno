@@ -1,8 +1,9 @@
 {
   "devDependencies": {
-    "esbuild": "^0.7.19"
+    "esbuild": "^0.7.21"
   },
   "dependencies": {
-    "pug-cli": "^1.0.0-alpha6"
+    "pug-cli": "^1.0.0-alpha6",
+    "qrcode": "^1.4.4"
   }
 }
