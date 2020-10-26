@@ -22,10 +22,10 @@ for (var i = 0; i < js.length; i++) {
 if (!endpoint) {
   for (i = 0; i < js.length; i++) {
     if (js[i].getAttribute('async') || js[i].getAttribute('defer')) {
-      throw (
+      throw Error(
         "Isso's automatic configuration detection failed, please " +
-        'refer to https://github.com/posativ/isso#client-configuration ' +
-        'and add a custom `data-isso` attribute.'
+          'refer to https://github.com/posativ/isso#client-configuration ' +
+          'and add a custom `data-isso` attribute.'
       )
     }
   }
@@ -43,7 +43,7 @@ if (endpoint[endpoint.length - 1] === '/') {
 }
 
 var curl = function (method, url, data, resolve, reject) {
-  var xhr = new XMLHttpRequest()
+  var xhr = new window.XMLHttpRequest()
 
   function onload() {
     var date = xhr.getResponseHeader('Date')
@@ -220,20 +220,6 @@ var feed = function (tid) {
   return endpoint + '/feed?' + qs({uri: tid || location()})
 }
 
-var preview = function (text) {
-  var deferred = Q.defer()
-  curl('POST', endpoint + '/preview', JSON.stringify({text: text}), function (
-    rv
-  ) {
-    if (rv.status === 200) {
-      deferred.resolve(JSON.parse(rv.body).text)
-    } else {
-      deferred.reject(rv.body)
-    }
-  })
-  return deferred.promise
-}
-
 export default {
   endpoint: endpoint,
   salt: salt,
@@ -246,6 +232,5 @@ export default {
   count: count,
   like: like,
   dislike: dislike,
-  feed: feed,
-  preview: preview
+  feed: feed
 }

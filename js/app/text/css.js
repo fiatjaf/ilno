@@ -25,22 +25,17 @@ export default {
     font-size: 0.8em;
     vertical-align: bottom;
 }
-#isso-thread .textarea {
+#isso-thread textarea {
     min-height: 58px;
+    min-width: 100%;
+    max-width: 100%;
     outline: 0;
-}
-#isso-thread .textarea.placeholder {
-    color: #757575;
 }
 
 #isso-root .isso-comment {
     max-width: 68em;
     padding-top: 0.95em;
     margin: 0.95em auto;
-}
-#isso-root .preview .isso-comment {
-    padding-top: 0;
-    margin: 0;
 }
 #isso-root .isso-comment:not(:first-of-type),
 .isso-follow-up .isso-comment {
@@ -95,10 +90,7 @@ export default {
     font-weight: bold;
     color: #555;
 }
-.isso-comment > div.text-wrapper > .textarea-wrapper .textarea,
-.isso-comment > div.text-wrapper > .textarea-wrapper .preview {
-    margin-top: 0.2em;
-}
+.isso-comment > div.text-wrapper > .textarea-wrapper textarea,
 .isso-comment > div.text-wrapper > div.text p {
     margin-top: 0.2em;
 }
@@ -114,13 +106,7 @@ export default {
     font-size: 130%;
     font-weight: bold;
 }
-.isso-comment > div.text-wrapper > div.textarea-wrapper .textarea,
-.isso-comment > div.text-wrapper > div.textarea-wrapper .preview {
-    width: 100%;
-    border: 1px solid #f0f0f0;
-    border-radius: 2px;
-    box-shadow: 0 0 2px #888;
-}
+.isso-comment > div.text-wrapper > div.textarea-wrapper textarea,
 .isso-comment > div.text-wrapper > .isso-comment-footer {
     font-size: 0.80em;
     color: gray !important;
@@ -163,44 +149,36 @@ export default {
     margin: 0 auto 2em;
     clear: right;
 }
-.isso-postbox > .form-wrapper {
+.isso-postbox > form {
     display: block;
     padding: 0;
 }
-.isso-postbox > .form-wrapper > .auth-section,
-.isso-postbox > .form-wrapper > .auth-section .post-action {
+.isso-postbox > form > .auth-section,
+.isso-postbox > form > .auth-section .post-action {
     display: block;
 }
-.isso-postbox > .form-wrapper .textarea,
-.isso-postbox > .form-wrapper .preview {
-    margin: 0 0 .3em;
-    padding: .4em .8em;
-    border-radius: 3px;
-    background-color: #fff;
-    border: 1px solid rgba(0, 0, 0, 0.2);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-.isso-postbox > .form-wrapper input[type=checkbox] {
+.isso-postbox > form textarea,
+.isso-postbox > form input[type=checkbox] {
     vertical-align: middle;
     position: relative;
     bottom: 1px;
     margin-left: 0;
 }
-.isso-postbox > .form-wrapper .notification-section {
+.isso-postbox > form .notification-section {
     font-size: 0.90em;
     padding-top: .3em;
 }
-#isso-thread .textarea:focus,
+#isso-thread textarea:focus,
 #isso-thread input:focus {
     border-color: rgba(0, 0, 0, 0.8);
 }
-.isso-postbox > .form-wrapper > .auth-section .input-wrapper {
+.isso-postbox > form > .auth-section .input-wrapper {
     display: inline-block;
     position: relative;
     max-width: 25%;
     margin: 0;
 }
-.isso-postbox > .form-wrapper > .auth-section .input-wrapper input {
+.isso-postbox > form > .auth-section .input-wrapper input {
     padding: .3em 10px;
     max-width: 100%;
     border-radius: 3px;
@@ -209,12 +187,12 @@ export default {
     border: 1px solid rgba(0, 0, 0, 0.2);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
-.isso-postbox > .form-wrapper > .auth-section .post-action {
+.isso-postbox > form > .auth-section .post-action {
     display: inline-block;
     float: right;
     margin: 0 0 0 5px;
 }
-.isso-postbox > .form-wrapper > .auth-section .post-action > input {
+.isso-postbox > form > .auth-section .post-action > input {
     padding: calc(.3em - 1px);
     border-radius: 2px;
     border: 1px solid #CCC;
@@ -224,45 +202,23 @@ export default {
     line-height: 1.4em;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
-.isso-postbox > .form-wrapper > .auth-section .post-action > input:hover {
+.isso-postbox > form > .auth-section .post-action > input:hover {
     background-color: #CCC;
 }
-.isso-postbox > .form-wrapper > .auth-section .post-action > input:active {
+.isso-postbox > form > .auth-section .post-action > input:active {
     background-color: #BBB;
 }
-.isso-postbox > .form-wrapper .preview,
-.isso-postbox > .form-wrapper input[name="edit"],
-.isso-postbox.preview-mode > .form-wrapper input[name="preview"],
-.isso-postbox.preview-mode > .form-wrapper .textarea {
-    display: none;
-}
-.isso-postbox.preview-mode > .form-wrapper .preview {
-    display: block;
-}
-.isso-postbox.preview-mode > .form-wrapper input[name="edit"] {
-    display: inline;
-}
-.isso-postbox > .form-wrapper .preview {
-    background-color: #f8f8f8;
-    background: repeating-linear-gradient(
-        -45deg,
-        #f8f8f8,
-        #f8f8f8 10px,
-        #fff 10px,
-        #fff 20px
-    );
-}
-.isso-postbox > .form-wrapper > .notification-section {
+.isso-postbox > form > .notification-section {
     display: none;
     padding-bottom: 10px;
 }
 @media screen and (max-width:600px) {
-    .isso-postbox > .form-wrapper > .auth-section .input-wrapper {
+    .isso-postbox > form > .auth-section .input-wrapper {
         display: block;
         max-width: 100%;
         margin: 0 0 .3em;
     }
-    .isso-postbox > .form-wrapper > .auth-section .input-wrapper input {
+    .isso-postbox > form > .auth-section .input-wrapper input {
         width: 100%;
     }
 }

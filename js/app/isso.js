@@ -1,34 +1,117 @@
 /* Isso – Ich schrei sonst!
  */
+
+import QRCode from 'qrcode'
+
 import $ from './dom'
 import utils from './utils'
 import config from './config'
+import lnurl from './lnurl'
 import api from './api'
 import jade from './jade'
 import i18n from './i18n'
-import lib from './lib'
+import identicons from './lib/identicons'
 import globals from './globals'
 
 var Postbox = function (parent) {
-  var localStorage = utils.localStorageImpl,
-    el = $.htmlify(
-      jade.render('postbox', {
-        author: JSON.parse(localStorage.getItem('author')),
-        email: JSON.parse(localStorage.getItem('email')),
-        website: JSON.parse(localStorage.getItem('website')),
-        preview: ''
-      })
-    )
+  function render() {
+    return jade.render('postbox', {
+      lnurlauth: lnurl.encode(lnurl.authURL),
+      authed,
+      author: JSON.parse(localStorage.getItem('author')),
+      email: JSON.parse(localStorage.getItem('email')),
+      website: JSON.parse(localStorage.getItem('website'))
+    })
+  }
 
-  // callback on success (e.g. to toggle the reply button)
-  el.onsuccess = function () {}
+  function postRender() {
+    // only display notification checkbox if email is filled in
+    var email_edit = function () {
+      if (
+        config['reply-notifications'] &&
+        $("[name='email']", el).value.length > 0
+      ) {
+        $('.notification-section', el).show()
+      } else {
+        $('.notification-section', el).hide()
+      }
+    }
+    $("[name='email']", el).on('input', email_edit)
+    email_edit()
+
+    // email is not optional if this config parameter is set
+    if (config['require-email']) {
+      $("[name='email']", el).setAttribute(
+        'placeholder',
+        $("[name='email']", el)
+          .getAttribute('placeholder')
+          .replace(/ \(.*\)/, '')
+      )
+    }
+
+    // author is not optional if this config parameter is set
+    if (config['require-author']) {
+      $("[name='author']", el).placeholder = $(
+        "[name='author']",
+        el
+      ).placeholder.replace(/ \(.*\)/, '')
+    }
+
+    // submit form, initialize optional fields with `null` and reset form.
+    // If replied to a comment, remove form completely.
+    $('form', el).on('submit', function () {
+      if (!el.validate()) {
+        return
+      }
+
+      var author = $('[name=author]', el).value || null,
+        email = $('[name=email]', el).value || null,
+        website = $('[name=website]', el).value || null
+
+      localStorage.setItem('author', JSON.stringify(author))
+      localStorage.setItem('email', JSON.stringify(email))
+      localStorage.setItem('website', JSON.stringify(website))
+
+      api
+        .create($('#isso-thread').getAttribute('data-isso-id'), {
+          author: author,
+          email: email,
+          website: website,
+          text: $('textarea', el).value,
+          parent: parent || null,
+          title: $('#isso-thread').getAttribute('data-title') || null,
+          notification: $('[name=notification]', el).checked() ? 1 : 0
+        })
+        .then(function (comment) {
+          $('textarea', el).value = ''
+          $('textarea', el).blur()
+          insert(comment, true)
+
+          if (parent !== null) {
+            el.onsuccess()
+          }
+        })
+    })
+  }
+
+  var authed = false
+  var localStorage = utils.localStorageImpl
+  var el = $.htmlify(render())
+
+  // render QR code
+  let canvas = el.obj.querySelector('canvas')
+  QRCode.toCanvas(canvas, canvas.dataset.qr.toUpperCase())
+
+  // wait for login from wallet
+  lnurl.listen(() => {
+    authed = true
+    el.innerHTML = render()
+    postRender()
+  })
 
   el.validate = function () {
-    if (
-      utils.text($('.textarea', this).innerHTML).length < 3 ||
-      $('.textarea', this).classList.contains('placeholder')
-    ) {
-      $('.textarea', this).focus()
+    if ($('textarea', this).value.length < 3) {
+      $('textarea', this).focus()
       return false
     }
     if (
@@ -47,93 +130,6 @@ var Postbox = function (parent) {
     }
     return true
   }
-
-  // only display notification checkbox if email is filled in
-  var email_edit = function () {
-    if (
-      config['reply-notifications'] &&
-      $("[name='email']", el).value.length > 0
-    ) {
-      $('.notification-section', el).show()
-    } else {
-      $('.notification-section', el).hide()
-    }
-  }
-  $("[name='email']", el).on('input', email_edit)
-  email_edit()
-
-  // email is not optional if this config parameter is set
-  if (config['require-email']) {
-    $("[name='email']", el).setAttribute(
-      'placeholder',
-      $("[name='email']", el)
-        .getAttribute('placeholder')
-        .replace(/ \(.*\)/, '')
-    )
-  }
-
-  // author is not optional if this config parameter is set
-  if (config['require-author']) {
-    $("[name='author']", el).placeholder = $(
-      "[name='author']",
-      el
-    ).placeholder.replace(/ \(.*\)/, '')
-  }
-
-  // preview function
-  $("[name='preview']", el).on('click', function () {
-    api.preview(utils.text($('.textarea', el).innerHTML)).then(function (html) {
-      $('.preview .text', el).innerHTML = html
-      el.classList.add('preview-mode')
-    })
-  })
-
-  // edit function
-  var edit = function () {
-    $('.preview .text', el).innerHTML = ''
-    el.classList.remove('preview-mode')
-  }
-  $("[name='edit']", el).on('click', edit)
-  $('.preview', el).on('click', edit)
-
-  // submit form, initialize optional fields with `null` and reset form.
-  // If replied to a comment, remove form completely.
-  $('[type=submit]', el).on('click', function () {
-    edit()
-    if (!el.validate()) {
-      return
-    }
-
-    var author = $('[name=author]', el).value || null,
-      email = $('[name=email]', el).value || null,
-      website = $('[name=website]', el).value || null
-
-    localStorage.setItem('author', JSON.stringify(author))
-    localStorage.setItem('email', JSON.stringify(email))
-    localStorage.setItem('website', JSON.stringify(website))
-
-    api
-      .create($('#isso-thread').getAttribute('data-isso-id'), {
-        author: author,
-        email: email,
-        website: website,
-        text: utils.text($('.textarea', el).innerHTML),
-        parent: parent || null,
-        title: $('#isso-thread').getAttribute('data-title') || null,
-        notification: $('[name=notification]', el).checked() ? 1 : 0
-      })
-      .then(function (comment) {
-        $('.textarea', el).innerHTML = ''
-        $('.textarea', el).blur()
-        insert(comment, true)
-
-        if (parent !== null) {
-          el.onsuccess()
-        }
-      })
-  })
-
-  lib.editorify($('.textarea', el))
 
   return el
 }
@@ -202,9 +198,7 @@ var insert = function (comment, scrollIntoView) {
   refresh()
 
   if (config['avatar']) {
-    $('div.avatar > svg', el).replace(
-      lib.identicons.generate(comment.hash, 4, 48)
-    )
+    $('div.avatar > svg', el).replace(identicons.generate(comment.hash, 4, 48))
   }
 
   var entrypoint
@@ -240,7 +234,7 @@ var insert = function (comment, scrollIntoView) {
       form.onsuccess = function () {
         toggler.next()
       }
-      $('.textarea', form).focus()
+      $('textarea', form).focus()
       $('a.reply', footer).textContent = i18n.translate('comment-close')
     },
     function () {
@@ -319,9 +313,9 @@ var insert = function (comment, scrollIntoView) {
 
       toggler.canceled = false
       api.view(comment.id, 1).then(function (rv) {
-        var textarea = lib.editorify($.new('div.textarea'))
+        var textarea = $.new('textarea')
 
-        textarea.innerHTML = utils.detext(rv.text)
+        textarea.value = rv.text
         textarea.focus()
 
         text.classList.remove('text')
@@ -336,24 +330,22 @@ var insert = function (comment, scrollIntoView) {
       }
     },
     function (toggler) {
-      var textarea = $('.textarea', text)
+      var textarea = $('textarea', text)
       var avatar =
         config['avatar'] || config['gravatar']
           ? $('.avatar', el, false)[0]
           : null
 
       if (!toggler.canceled && textarea !== null) {
-        if (utils.text(textarea.innerHTML).length < 3) {
+        if (textarea.value.length < 3) {
           textarea.focus()
           toggler.wait()
           return
         } else {
-          api
-            .modify(comment.id, {text: utils.text(textarea.innerHTML)})
-            .then(function (rv) {
-              text.innerHTML = rv.text
-              comment.text = rv.text
-            })
+          api.modify(comment.id, {text: textarea.value}).then(function (rv) {
+            text.innerHTML = rv.text
+            comment.text = rv.text
+          })
         }
       } else {
         text.innerHTML = comment.text

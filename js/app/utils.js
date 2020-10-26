@@ -39,36 +39,6 @@ var ago = function (localTime, date) {
   )
 }
 
-var HTMLEntity = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
-  '/': '&#x2F;'
-}
-
-var escape = function (html) {
-  return String(html).replace(/[&<>"'\/]/g, function (s) {
-    return HTMLEntity[s]
-  })
-}
-
-var text = function (html) {
-  var _ = document.createElement('div')
-  _.innerHTML = html
-    .replace(/<div><br><\/div>/gi, '<br>')
-    .replace(/<div>/gi, '<br>')
-    .replace(/<br>/gi, '\n')
-    .replace(/&nbsp;/gi, ' ')
-  return _.textContent.trim()
-}
-
-var detext = function (text) {
-  text = escape(text)
-  return text.replace(/\n\n/gi, '<br><div><br></div>').replace(/\n/gi, '<br>')
-}
-
 // Safari private browsing mode supports localStorage, but throws QUOTA_EXCEEDED_ERR
 var localStorageImpl
 try {
@@ -95,7 +65,5 @@ export default {
   cookie: cookie,
   pad: pad,
   ago: ago,
-  text: text,
-  detext: detext,
   localStorageImpl: localStorageImpl
 }
