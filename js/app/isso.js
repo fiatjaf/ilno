@@ -1,10 +1,6 @@
 /* Isso – Ich schrei sonst!
  */
 
-import QRCode from 'qrcode'
-
-import $ from './dom'
-import utils from './utils'
 import config from './config'
 import lnurl from './lnurl'
 import api from './api'
@@ -14,122 +10,9 @@ import identicons from './lib/identicons'
 import globals from './globals'
 
 var Postbox = function (parent) {
-  function render() {
-    return jade.render('postbox', {
-      lnurlauth: lnurl.encode(lnurl.authURL),
-      authed,
-      author: JSON.parse(localStorage.getItem('author')),
-      email: JSON.parse(localStorage.getItem('email')),
-      website: JSON.parse(localStorage.getItem('website'))
-    })
-  }
-
-  function postRender() {
-    // only display notification checkbox if email is filled in
-    var email_edit = function () {
-      if (
-        config['reply-notifications'] &&
-        $("[name='email']", el).value.length > 0
-      ) {
-        $('.notification-section', el).show()
-      } else {
-        $('.notification-section', el).hide()
-      }
-    }
-    $("[name='email']", el).on('input', email_edit)
-    email_edit()
-
-    // email is not optional if this config parameter is set
-    if (config['require-email']) {
-      $("[name='email']", el).setAttribute(
-        'placeholder',
-        $("[name='email']", el)
-          .getAttribute('placeholder')
-          .replace(/ \(.*\)/, '')
-      )
-    }
-
-    // author is not optional if this config parameter is set
-    if (config['require-author']) {
-      $("[name='author']", el).placeholder = $(
-        "[name='author']",
-        el
-      ).placeholder.replace(/ \(.*\)/, '')
-    }
-
-    // submit form, initialize optional fields with `null` and reset form.
-    // If replied to a comment, remove form completely.
-    $('form', el).on('submit', function () {
-      if (!el.validate()) {
-        return
-      }
-
-      var author = $('[name=author]', el).value || null,
-        email = $('[name=email]', el).value || null,
-        website = $('[name=website]', el).value || null
-
-      localStorage.setItem('author', JSON.stringify(author))
-      localStorage.setItem('email', JSON.stringify(email))
-      localStorage.setItem('website', JSON.stringify(website))
-
-      api
-        .create($('#isso-thread').getAttribute('data-isso-id'), {
-          author: author,
-          email: email,
-          website: website,
-          text: $('textarea', el).value,
-          parent: parent || null,
-          title: $('#isso-thread').getAttribute('data-title') || null,
-          notification: $('[name=notification]', el).checked() ? 1 : 0
-        })
-        .then(function (comment) {
-          $('textarea', el).value = ''
-          $('textarea', el).blur()
-          insert(comment, true)
-
-          if (parent !== null) {
-            el.onsuccess()
-          }
-        })
-    })
-  }
-
   var authed = false
   var localStorage = utils.localStorageImpl
   var el = $.htmlify(render())
-
-  // render QR code
-  let canvas = el.obj.querySelector('canvas')
-  QRCode.toCanvas(canvas, canvas.dataset.qr.toUpperCase())
-
-  // wait for login from wallet
-  lnurl.listen(() => {
-    authed = true
-    el.innerHTML = render()
-    postRender()
-  })
-
-  el.validate = function () {
-    if ($('textarea', this).value.length < 3) {
-      $('textarea', this).focus()
-      return false
-    }
-    if (
-      config['require-email'] &&
-      $("[name='email']", this).value.length <= 0
-    ) {
-      $("[name='email']", this).focus()
-      return false
-    }
-    if (
-      config['require-author'] &&
-      $("[name='author']", this).value.length <= 0
-    ) {
-      $("[name='author']", this).focus()
-      return false
-    }
-    return true
-  }
 
   return el
 }
@@ -185,7 +68,6 @@ var insert_loader = function (comment, lastcreated) {
 var insert = function (comment, scrollIntoView) {
   var el = $.htmlify(jade.render('comment', {comment: comment}))
 
-  // update datetime every 60 seconds
   var refresh = function () {
     $('.permalink > time', el).textContent = utils.ago(
       globals.offset.localTime(),

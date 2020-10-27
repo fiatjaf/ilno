@@ -65,5 +65,5 @@ export default {
   cookie: cookie,
   pad: pad,
   ago: ago,
-  localStorageImpl: localStorageImpl
+  localStorage: localStorageImpl
 }

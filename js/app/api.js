@@ -1,14 +1,14 @@
 import Q from './lib/promise'
 import globals from './globals'
 
-var salt = 'Eech7co8Ohloopo9Ol6baimi',
-  location = function () {
-    return window.location.pathname
-  }
+var salt = 'Eech7co8Ohloopo9Ol6baimi'
+var location = function () {
+  return window.location.pathname
+}
 
-var script,
-  endpoint,
-  js = document.getElementsByTagName('script')
+var script
+var endpoint
+var js = document.getElementsByTagName('script')
 
 // prefer `data-isso="//host/api/endpoint"` if provided
 for (var i = 0; i < js.length; i++) {
@@ -97,7 +97,12 @@ var qs = function (params) {
   return rv.substring(0, rv.length - 1) // chop off trailing "&"
 }
 
-var create = function (tid, data) {
+var create = function (data) {
+  let rootElement = document.getElementById('isso-thread')
+  let tid = rootElement.dataset.issoId
+  let title = rootElement.dataset.issoTitle
+  data.title = title
+
   var deferred = Q.defer()
   curl(
     'POST',
@@ -155,7 +160,10 @@ var view = function (id, plain) {
   return deferred.promise
 }
 
-var fetch = function (tid, limit, nested_limit, parent, lastcreated) {
+var fetch = function (limit, nested_limit, parent, lastcreated) {
+  let rootElement = document.getElementById('isso-thread')
+  let tid = rootElement.dataset.issoId
+
   if (typeof limit === 'undefined') {
     limit = 'inf'
   }

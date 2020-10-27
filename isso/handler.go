@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fiatjaf/go-lnurl"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
 	"wrong.wang/x/go-isso/extract"
@@ -33,6 +34,13 @@ func (isso *ISSO) CreateComment() http.HandlerFunc {
 		err := jsonBind(r.Body, &comment)
 		if err != nil {
 			json.BadRequest(requestID, w, err, descRequestInvalidParm)
+			return
+		}
+
+		ok, err := lnurl.VerifySignature(comment.K1, comment.Sig, comment.Key)
+		if !ok {
+			json.Unauthorized(requestID, w, err,
+				fmt.Sprintf("user credentials are invalid: %s", err.Error()))
 			return
 		}
 
@@ -252,6 +260,7 @@ func (isso *ISSO) CountComment() http.HandlerFunc {
 			json.OK(w, counts)
 			return
 		}
+
 		countsByURI, err := isso.storage.CountComment(r.Context(), uris)
 		if err != nil {
 			json.ServerError(requestID, w, err, descStorageUnhandledError)

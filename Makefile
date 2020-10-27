@@ -14,13 +14,8 @@ ilno: $(shell ag -l --go) server/bindata.go
 server/bindata.go: static/js/embed.min.js
 	go-bindata -fs -o server/bindata.go -pkg server -prefix "static/" static/js/...
 
-static/js/%.min.js: js/%.js $(shell find ./js) js/app/text/postbox.js js/app/text/comment_loader.js js/app/text/comment.js
-	./node_modules/esbuild/bin/esbuild --bundle --minify --sourcemap --outfile=$@ $<
+static/js/%.min.js: js/%.js $(shell find ./js)
+	./node_modules/esbuild/bin/esbuild --bundle --minify --sourcemap --outfile=$@ --define:process.env.NODE_ENV='"production"' $<
 
-static/js/%.js: js/%.js $(shell find ./js) js/app/text/postbox.js js/app/text/comment_loader.js js/app/text/comment.js
-	./node_modules/esbuild/bin/esbuild --bundle --sourcemap --outfile=$@ $<
-
-js/app/text/%.js: js/app/text/%.jade
-	./node_modules/.bin/pug --client --no-debug --name tt_$* --silent $<
-	echo '' >> $@
-	echo 'export default tt_$*' >> $@
+static/js/%.js: js/%.js $(shell find ./js)
+	./node_modules/esbuild/bin/esbuild --bundle --sourcemap --outfile=$@ --define:process.env.NODE_ENV='"development"' $<

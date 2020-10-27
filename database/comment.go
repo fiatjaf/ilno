@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 
 	"gopkg.in/guregu/null.v4"
 	"wrong.wang/x/go-isso/isso"
@@ -198,6 +199,7 @@ func (d *Database) CountComment(ctx context.Context, uris []string) (map[string]
 	if len(uris) == 0 {
 		return commentByURI, nil
 	}
+	log.Print(d.statement["comment_count"])
 	rows, err := d.DB.QueryContext(ctx, d.statement["comment_count"])
 	defer rows.Close()
 

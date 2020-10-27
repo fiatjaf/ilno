@@ -15,7 +15,7 @@ type Comment struct {
 	Modified     *float64  `json:"modified"`
 	Mode         int       `json:"mode"`
 	Text         string    `json:"text"  validate:"required,gte=3,lte=65535"`
-	Author       string    `json:"author"  validate:"required,gte=1,lte=15"`
+	Author       string    `json:"author"`
 	Email        *string   `json:"email,omitempty"  validate:"omitempty,email"`
 	Website      *string   `json:"website"  validate:"omitempty,url"`
 	Likes        int       `json:"likes"`
@@ -29,6 +29,9 @@ type submittedComment struct {
 	Comment
 	URI   string `json:"-" validate:"required,uri"`
 	Title string `json:"title" validate:"omitempty"`
+	Key   string `json:"key"`
+	Sig   string `json:"sig"`
+	K1    string `json:"k1"`
 }
 
 type reply struct {

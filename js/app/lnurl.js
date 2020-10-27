@@ -1,5 +1,6 @@
 import bech32 from 'bech32'
 
+import utils from './utils'
 import api from './api'
 
 const letters = '0123456789abcdef'
@@ -15,11 +16,16 @@ const authURL = api.endpoint + '/lnurlauth?tag=login&k1=' + k1
 var sig
 var key
 
+var user = JSON.parse(
+  utils.localStorage.getItem('stored-user') || '{"name": ""}'
+)
+
 export default {
   k1,
   sig,
   key,
   authURL,
+  user,
   encode,
   listen
 }
@@ -39,6 +45,13 @@ function listen(cb) {
     let data = JSON.parse(e.data)
     sig = data.sig
     key = data.key
-    cb()
+    es.close()
+
+    user.sig = sig
+    user.key = key
+    user.k1 = k1
+    utils.localStorage.setItem('stored-user', JSON.stringify(user))
+
+    cb(user)
   })
 }
