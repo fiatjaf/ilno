@@ -1,11 +1,11 @@
 package version
 
 var (
-	// BuildTime is the build time of go-isso.
+	// BuildTime is the build time of go-ilno.
 	BuildTime string
-	// Version of the go-isso
+	// Version of the go-ilno
 	Version string
 )
 
 // Mod is Moudle name
-const Mod = "wrong.wang/x/go-isso/"
+const Mod = "github.com/fiatjaf/ilno/"

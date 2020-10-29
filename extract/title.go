@@ -48,16 +48,16 @@ func titleAndThreadURI(body io.Reader, defaultTitle string, defaultURI string) (
 		return
 	}
 
-	issoRoot := getNodeByID(htmlRoot, "isso-thread")
-	if issoRoot == nil {
-		err = errors.New("can not find isso root in page")
+	ilnoRoot := getNodeByID(htmlRoot, "ilno-thread")
+	if ilnoRoot == nil {
+		err = errors.New("can not find ilno root in page")
 		return
 	}
 
-	if u, ok := getAttrbyName(issoRoot, "data-isso-id"); ok {
+	if u, ok := getAttrbyName(ilnoRoot, "data-ilno-id"); ok {
 		uri = u
 	}
-	title, ok := getAttrbyName(issoRoot, "data-title")
+	title, ok := getAttrbyName(ilnoRoot, "data-title")
 	if ok {
 		return
 	}

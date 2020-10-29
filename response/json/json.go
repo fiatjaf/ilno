@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"strings"
 
-	"wrong.wang/x/go-isso/logger"
-	"wrong.wang/x/go-isso/version"
+	"github.com/fiatjaf/ilno/logger"
+	"github.com/fiatjaf/ilno/version"
 )
 
 const contentTypeHeader = `application/json`

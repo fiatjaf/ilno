@@ -3,53 +3,42 @@ package server
 import (
 	"net/http"
 
+	"github.com/fiatjaf/ilno/ilno"
+	"github.com/fiatjaf/ilno/lnurl"
 	"github.com/gorilla/mux"
-	"wrong.wang/x/go-isso/isso"
-	"wrong.wang/x/go-isso/lnurl"
 )
 
-func workInProcess(w http.ResponseWriter, r *http.Request) {
+func wip(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("work in process\n"))
 }
 
-func ping(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("pong\n"))
-}
-
-func registerRoute(router *mux.Router, isso *isso.ISSO) {
+func registerRoute(router *mux.Router, ilno *ilno.ILNO) {
 	router.HandleFunc("/lnurlauth", lnurl.Auth).Methods("GET").Name("lnurlauth")
 	router.HandleFunc("/lnurlauth/stream", lnurl.AuthStream).Methods("GET").Name("lnurlauthstream")
-	router.HandleFunc("/new", isso.CreateComment()).Queries("uri", "{uri}").Methods("POST").Name("new")
+	router.HandleFunc("/new", ilno.CreateComment()).Queries("uri", "{uri}").Methods("POST").Name("new")
 
 	// single comment
-	router.HandleFunc("/id/{id:[0-9]+}", isso.ViewComment()).Methods("GET").Name("view")
-	router.HandleFunc("/id/{id:[0-9]+}", isso.EditComment()).Methods("PUT").Name("edit")
-	router.HandleFunc("/id/{id:[0-9]+}", isso.DeleteComment()).Methods("DELETE").Name("delete")
-	router.HandleFunc("/id/{id:[0-9]+}/{vote:(?:like|dislike)}", isso.VoteComment()).Methods("POST").Name("vote")
+	router.HandleFunc("/id/{id:[0-9]+}", ilno.ViewComment()).Methods("GET").Name("view")
+	router.HandleFunc("/id/{id:[0-9]+}", ilno.EditComment()).Methods("PUT").Name("edit")
+	router.HandleFunc("/id/{id:[0-9]+}/delete", ilno.DeleteComment()).Methods("POST").Name("delete")
+	router.HandleFunc("/id/{id:[0-9]+}/{vote:(?:like|dislike)}", ilno.VoteComment()).Methods("POST").Name("vote")
 
-	router.HandleFunc("/id/{id:[0-9]+}/{action:(?:edit|activate|delete)}/{key}", workInProcess).
+	router.HandleFunc("/id/{id:[0-9]+}/{action:(?:edit|activate|delete)}/{key}", wip).
 		Methods("GET").Name("moderate_get")
-	router.HandleFunc("/id/{id:[0-9]+}/{action:(?:edit|activate|delete)}>/{key}", workInProcess).
+	router.HandleFunc("/id/{id:[0-9]+}/{action:(?:edit|activate|delete)}>/{key}", wip).
 		Methods("POST").Name("moderate_post")
-	router.HandleFunc("/id/{id:[0-9]+}/unsubscribe/{email}/{key}>", workInProcess).
-		Methods("GET").Name("unsubscribe")
-
-	// functional
-	router.HandleFunc("/demo", workInProcess).Methods("GET").Name("demo")
-
-	// amdin staff
-	router.HandleFunc("/admin", workInProcess).Methods("GET").Name("admin")
-	router.HandleFunc("/login", workInProcess).Methods("POST").Name("login")
 
 	// ping
-	router.HandleFunc("/ping", ping).Name("ping")
+	router.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("pong\n"))
+	}).Name("ping")
 
 	// total staff
-	router.HandleFunc("/latest", workInProcess).Methods("GET").Name("latest")
-	router.HandleFunc("/count", workInProcess).Methods("GET").Name("count")
-	router.HandleFunc("/count", isso.CountComment()).Methods("POST").Name("counts")
+	router.HandleFunc("/latest", wip).Methods("GET").Name("latest")
+	router.HandleFunc("/count", wip).Methods("GET").Name("count")
+	router.HandleFunc("/count", ilno.CountComment()).Methods("POST").Name("counts")
 
 	router.PathPrefix("/js").Handler(http.FileServer(AssetFile()))
 
-	router.HandleFunc("/", isso.FetchComments()).Queries("uri", "{uri}").Methods("GET").Name("fetch")
+	router.HandleFunc("/", ilno.FetchComments()).Queries("uri", "{uri}").Methods("GET").Name("fetch")
 }

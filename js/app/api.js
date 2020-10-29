@@ -10,10 +10,10 @@ var script
 var endpoint
 var js = document.getElementsByTagName('script')
 
-// prefer `data-isso="//host/api/endpoint"` if provided
+// prefer `data-ilno="//host/api/endpoint"` if provided
 for (var i = 0; i < js.length; i++) {
-  if (js[i].hasAttribute('data-isso')) {
-    endpoint = js[i].getAttribute('data-isso')
+  if (js[i].hasAttribute('data-ilno')) {
+    endpoint = js[i].getAttribute('data-ilno')
     break
   }
 }
@@ -24,8 +24,8 @@ if (!endpoint) {
     if (js[i].getAttribute('async') || js[i].getAttribute('defer')) {
       throw Error(
         "Isso's automatic configuration detection failed, please " +
-          'refer to https://github.com/posativ/isso#client-configuration ' +
-          'and add a custom `data-isso` attribute.'
+          'refer to https://github.com/posativ/ilno#client-configuration ' +
+          'and add a custom `data-ilno` attribute.'
       )
     }
   }
@@ -52,7 +52,7 @@ var curl = function (method, url, data, resolve, reject) {
     }
 
     var cookie = xhr.getResponseHeader('X-Set-Cookie')
-    if (cookie && cookie.match(/^isso-/)) {
+    if (cookie && cookie.match(/^ilno-/)) {
       document.cookie = cookie
     }
 
@@ -67,7 +67,6 @@ var curl = function (method, url, data, resolve, reject) {
 
   try {
     xhr.open(method, url, true)
-    xhr.withCredentials = true
     xhr.setRequestHeader('Content-Type', 'application/json')
 
     xhr.onreadystatechange = function () {
@@ -98,9 +97,9 @@ var qs = function (params) {
 }
 
 var create = function (data) {
-  let rootElement = document.getElementById('isso-thread')
-  let tid = rootElement.dataset.issoId
-  let title = rootElement.dataset.issoTitle
+  let rootElement = document.getElementById('ilno-thread')
+  let tid = rootElement.dataset.ilnoId
+  let title = rootElement.dataset.ilnoTitle
   data.title = title
 
   var deferred = Q.defer()
@@ -135,9 +134,9 @@ var modify = function (id, data) {
 
 var remove = function (id) {
   var deferred = Q.defer()
-  curl('DELETE', endpoint + '/id/' + id, null, function (rv) {
+  curl('POST', endpoint + '/id/' + id + '/delete', null, function (rv) {
     if (rv.status === 403) {
-      deferred.reject('Not authorized to remove this comment!')
+      deferred.reject('Not authorized to delete this comment!')
     } else if (rv.status === 200) {
       deferred.resolve(JSON.parse(rv.body) === null)
     } else {
@@ -160,28 +159,15 @@ var view = function (id, plain) {
   return deferred.promise
 }
 
-var fetch = function (limit, nested_limit, parent, lastcreated) {
-  let rootElement = document.getElementById('isso-thread')
-  let tid = rootElement.dataset.issoId
+var fetch = function (parent, lastcreated) {
+  let rootElement = document.getElementById('ilno-thread')
+  let tid = rootElement.dataset.ilnoId
 
-  if (typeof limit === 'undefined') {
-    limit = 'inf'
-  }
-  if (typeof nested_limit === 'undefined') {
-    nested_limit = 'inf'
-  }
   if (typeof parent === 'undefined') {
     parent = null
   }
 
   var query_dict = {uri: tid || location(), after: lastcreated, parent: parent}
-
-  if (limit !== 'inf') {
-    query_dict['limit'] = limit
-  }
-  if (nested_limit !== 'inf') {
-    query_dict['nested_limit'] = nested_limit
-  }
 
   var deferred = Q.defer()
   curl('GET', endpoint + '/?' + qs(query_dict), null, function (rv) {
@@ -193,6 +179,7 @@ var fetch = function (limit, nested_limit, parent, lastcreated) {
       deferred.reject(rv.body)
     }
   })
+
   return deferred.promise
 }
 

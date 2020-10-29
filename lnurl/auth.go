@@ -8,7 +8,7 @@ import (
 	"github.com/fiatjaf/go-lnurl"
 	cmap "github.com/orcaman/concurrent-map"
 	"gopkg.in/antage/eventsource.v1"
-	"wrong.wang/x/go-isso/logger"
+	"github.com/fiatjaf/ilno/logger"
 )
 
 var userstreams = cmap.New()

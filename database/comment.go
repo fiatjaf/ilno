@@ -5,11 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 
+	"github.com/fiatjaf/ilno/ilno"
+	"github.com/fiatjaf/ilno/logger"
 	"gopkg.in/guregu/null.v4"
-	"wrong.wang/x/go-isso/isso"
-	"wrong.wang/x/go-isso/logger"
 )
 
 // IsApprovedAuthor check if email has approved in 6 month
@@ -26,51 +25,51 @@ func (d *Database) IsApprovedAuthor(ctx context.Context, email string) bool {
 }
 
 // NewComment add comment into database
-func (d *Database) NewComment(ctx context.Context, c isso.Comment, threadID int64, remoteAddr string) (isso.Comment, error) {
+func (d *Database) NewComment(ctx context.Context, c ilno.Comment, threadID int64) (ilno.Comment, error) {
 	ctx, cancel := d.withTimeout(ctx)
 	defer cancel()
-	logger.Debug("create %s 's comment at %d", c.Author, threadID)
+	logger.Debug("create %s's comment at %d", c.Author, threadID)
 	if c.Parent != nil {
 		parent, err := d.getComment(ctx, *c.Parent)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return isso.Comment{}, wraperror(err)
+				return ilno.Comment{}, wraperror(err)
 			}
-			return isso.Comment{}, wraperror(err)
+			return ilno.Comment{}, wraperror(err)
 		}
 		if parent.TID != threadID {
-			return isso.Comment{}, wraperror(err)
+			return ilno.Comment{}, wraperror(err)
 		}
 		if parent.Parent.Valid {
 			c.Parent = &parent.Parent.Int64
 		}
 	}
 
-	nc := newNullComment(c, threadID, remoteAddr)
+	nc := newNullComment(c, threadID)
 
-	result, err := d.DB.ExecContext(ctx, d.statement["comment_new"], nc.TID, nc.Parent, nc.Created,
-		nc.Modified, nc.Mode, nc.RemoteAddr, nc.Text, nc.Author, nc.Email, nc.Website, nc.Voters, nc.Notification,
-	)
+	result, err := d.DB.ExecContext(ctx, d.statement["comment_new"],
+		nc.TID, nc.Parent, nc.Created, nc.Modified, nc.Mode,
+		nc.Text, nc.Key, nc.Author, nc.Voters)
 	if err != nil {
-		return isso.Comment{}, wraperror(err)
+		return ilno.Comment{}, wraperror(err)
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		return isso.Comment{}, wraperror(err)
+		return ilno.Comment{}, wraperror(err)
 	}
 	comment, err := d.GetComment(ctx, id)
 	if err != nil {
-		return isso.Comment{}, wraperror(err)
+		return ilno.Comment{}, wraperror(err)
 	}
 	return comment, nil
 }
 
 // GetComment get comment by ID
-func (d *Database) GetComment(ctx context.Context, id int64) (isso.Comment, error) {
+func (d *Database) GetComment(ctx context.Context, id int64) (ilno.Comment, error) {
 	logger.Debug("get comment %d", id)
 	nc, err := d.getComment(ctx, id)
 	if err != nil {
-		return isso.Comment{}, wraperror(err)
+		return ilno.Comment{}, wraperror(err)
 	}
 	return nc.ToComment(), nil
 }
@@ -83,8 +82,7 @@ func (d *Database) getComment(ctx context.Context, id int64) (nullComment, error
 	voters := make([]byte, 256)
 	err := d.DB.QueryRowContext(ctx, d.statement["comment_get_by_id"], id).Scan(
 		&nc.TID, &nc.ID, &nc.Parent, &nc.Created, &nc.Modified, &nc.Mode,
-		&nc.RemoteAddr, &nc.Text, &nc.Author, &nc.Email, &nc.Website, &nc.Likes,
-		&nc.Dislikes, &voters, &nc.Notification,
+		&nc.Text, &nc.Key, &nc.Author, &nc.Likes, &nc.Dislikes, &voters,
 	)
 	nc.Voters = voters
 	if err != nil {
@@ -95,14 +93,14 @@ func (d *Database) getComment(ctx context.Context, id int64) (nullComment, error
 
 // CountReply return comment count for main thread's comment and all reply threads for one uri.
 // 0 mean null parent
-func (d *Database) CountReply(ctx context.Context, uri string, mode int, after float64) (map[int64]int64, error) {
+func (d *Database) CountReply(ctx context.Context, uri string, mode int) (map[int64]int64, error) {
 	logger.Debug("uri: %s", uri)
 	ctx, cancel := d.withTimeout(ctx)
 	defer cancel()
 
 	counts := map[int64]int64{}
 
-	rows, err := d.DB.QueryContext(ctx, d.statement["comment_count_reply"], uri, mode, mode, after)
+	rows, err := d.DB.QueryContext(ctx, d.statement["comment_count_reply"], uri, mode)
 	if err != nil {
 		return nil, wraperror(err)
 	}
@@ -127,7 +125,7 @@ func (d *Database) CountReply(ctx context.Context, uri string, mode int, after f
 }
 
 // FetchCommentsByURI fetch comments related uri with a lot of param
-func (d *Database) FetchCommentsByURI(ctx context.Context, uri string, parent int64, mode int, orderBy string, asc bool) (map[int64][]isso.Comment, error) {
+func (d *Database) FetchCommentsByURI(ctx context.Context, uri string, parent int64, mode int, orderBy string, asc bool) (map[int64][]ilno.Comment, error) {
 	logger.Debug("uri: %s", uri)
 	ctx, cancel := d.withTimeout(ctx)
 	defer cancel()
@@ -164,15 +162,15 @@ func (d *Database) FetchCommentsByURI(ctx context.Context, uri string, parent in
 		return nil, wraperror(err)
 	}
 
-	commentsbyparent := map[int64][]isso.Comment{}
+	commentsbyparent := map[int64][]ilno.Comment{}
 
 	for rows.Next() {
 		var nc nullComment
 
 		err := rows.Scan(
 			&nc.TID, &nc.ID, &nc.Parent, &nc.Created, &nc.Modified, &nc.Mode,
-			&nc.RemoteAddr, &nc.Text, &nc.Author, &nc.Email, &nc.Website, &nc.Likes,
-			&nc.Dislikes, &nc.Voters, &nc.Notification,
+			&nc.Text, &nc.Key, &nc.Author, &nc.Likes,
+			&nc.Dislikes, &nc.Voters,
 		)
 		if err != nil {
 			return nil, wraperror(err)
@@ -199,7 +197,6 @@ func (d *Database) CountComment(ctx context.Context, uris []string) (map[string]
 	if len(uris) == 0 {
 		return commentByURI, nil
 	}
-	log.Print(d.statement["comment_count"])
 	rows, err := d.DB.QueryContext(ctx, d.statement["comment_count"])
 	defer rows.Close()
 
@@ -241,39 +238,39 @@ func (d *Database) ActivateComment(ctx context.Context, id int64) error {
 		return wraperror(err)
 	}
 	if rowsaffected != 1 {
-		return wraperror(isso.ErrNotExpectAmount)
+		return wraperror(ilno.ErrNotExpectAmount)
 	}
 	return nil
 }
 
 // EditComment edit comment
-func (d *Database) EditComment(ctx context.Context, c isso.Comment) (isso.Comment, error) {
+func (d *Database) EditComment(ctx context.Context, c ilno.Comment) (ilno.Comment, error) {
 	ctx, cancel := d.withTimeout(ctx)
 	defer cancel()
 	logger.Debug("edit %s 's comment", c.Author)
 
 	var rowsaffected int64
 	if c.Modified == nil {
-		return isso.Comment{}, wraperror(isso.ErrInvalidParam)
+		return ilno.Comment{}, wraperror(ilno.ErrInvalidParam)
 	}
-	err := d.execstmt(ctx, &rowsaffected, nil, d.statement["comment_edit"], c.Text, c.Author,
-		null.StringFromPtr(c.Website), *c.Modified, null.StringFromPtr(c.Email), c.ID)
+	err := d.execstmt(ctx, &rowsaffected, nil, d.statement["comment_edit"],
+		c.Text, c.Author, *c.Modified, c.ID)
 	if err != nil {
-		return isso.Comment{}, wraperror(err)
+		return ilno.Comment{}, wraperror(err)
 	}
 	if rowsaffected != 1 {
-		return isso.Comment{}, wraperror(isso.ErrNotExpectAmount)
+		return ilno.Comment{}, wraperror(ilno.ErrNotExpectAmount)
 	}
 
 	comment, err := d.GetComment(ctx, c.ID)
 	if err != nil {
-		return isso.Comment{}, wraperror(err)
+		return ilno.Comment{}, wraperror(err)
 	}
 	return comment, nil
 }
 
 // DeleteComment delete comment by id
-func (d *Database) DeleteComment(ctx context.Context, cid int64) (isso.Comment, error) {
+func (d *Database) DeleteComment(ctx context.Context, cid int64) (ilno.Comment, error) {
 	ctx, cancel := d.withTimeout(ctx)
 	defer cancel()
 	logger.Debug("delete comment %d", cid)
@@ -290,15 +287,15 @@ func (d *Database) DeleteComment(ctx context.Context, cid int64) (isso.Comment, 
 				if n > 0 {
 					return d.GetComment(ctx, cid)
 				}
-				return isso.Comment{}, nil
+				return ilno.Comment{}, nil
 			}
 		}
 	}
-	return isso.Comment{}, wraperror(err)
+	return ilno.Comment{}, wraperror(err)
 }
 
 // VoteComment vote  comment, but if may failed when break limit
-func (d *Database) VoteComment(ctx context.Context, c isso.Comment, up bool) error {
+func (d *Database) VoteComment(ctx context.Context, c ilno.Comment, up bool) error {
 	ctx, cancel := d.withTimeout(ctx)
 	defer cancel()
 	logger.Debug("vote comment %d", c.ID)

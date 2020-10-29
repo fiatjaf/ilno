@@ -1,4 +1,4 @@
-package isso
+package ilno
 
 import (
 	"encoding/json"

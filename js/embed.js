@@ -1,9 +1,9 @@
 import * as Vue from 'vue/dist/vue.esm-bundler.js'
 import QRCode from 'qrcode'
+import hashbow from 'hashbow'
 
 import domready from './app/lib/ready'
 import globals from './app/globals'
-import config from './app/config'
 import i18n from './app/i18n'
 import api from './app/api'
 import lnurl from './app/lnurl'
@@ -23,15 +23,15 @@ domready(() => {
 })
 
 function init() {
-  const root = document.getElementById('isso-thread')
+  const root = document.getElementById('ilno-thread')
   if (!root) {
-    return console.log('abort, #isso-thread is missing')
+    return console.log('abort, #ilno-thread is missing')
   }
 
   root.appendChild(document.createElement('root'))
 
   const style = document.createElement('style')
-  style.id = 'isso-style'
+  style.id = 'ilno-style'
   style.type = 'text/css'
   style.textContent = css.inline
   document.head.appendChild(style)
@@ -60,7 +60,7 @@ app.component('arrow-up', {
 })
 
 app.component('postbox', {
-  props: ['parent', 'onsuccess', 'user'],
+  props: ['parent', 'user'],
   data() {
     return {
       lnurlauth: lnurl.encode(lnurl.authURL),
@@ -68,14 +68,14 @@ app.component('postbox', {
     }
   },
   template: `
-<div class="isso-postbox">
+<div class="ilno-postbox">
   <form @submit="postComment">
     <div class="textarea-wrapper">
-      <textarea :placeholder="f.translate('postbox-text')" :value="text"></textarea>
+      <textarea :placeholder="f.translate('postbox-text')" v-model="text"></textarea>
     </div>
     <section class="auth-section">
       <p class="input-wrapper">
-        <input type="text" name="author" :placeholder="f.translate('postbox-author')" :value="user.name" />
+        <input type="text" name="author" :placeholder="f.translate('postbox-author')" v-model="user.name" />
       </p>
       <p class="post-action">
         <button type="submit">{{ f.translate('postbox-submit') }}</button>
@@ -99,17 +99,16 @@ app.component('postbox', {
         })
         .then(comment => {
           this.text = ''
+          this.$emit('created')
 
-          if (this.parent !== null) {
-            this.onsuccess()
-          }
+          utils.localStorage.setItem('stored-user', JSON.stringify(this.user))
         })
     }
   }
 })
 
 app.component('thread', {
-  props: ['comments', 'id'],
+  props: ['user', 'comments', 'id'],
   data() {
     return {}
   },
@@ -119,14 +118,22 @@ app.component('thread', {
     }
   },
   template: `
-<comment v-for="comment in comments" v-bind="comment" :key="comment.id" />
+<comment
+  v-for="comment in comments"
+  v-bind="comment"
+  :authorKey="comment.key"
+  :user="user"
+  :key="comment.id"
+/>
   `
 })
 
 app.component('comment', {
   props: [
+    'user',
     'id',
     'created',
+    'authorKey',
     'author',
     'text',
     'votes',
@@ -139,7 +146,11 @@ app.component('comment', {
   ],
   data() {
     return {
-      createdHumanized: ''
+      createdHumanized: '',
+      deleting: false,
+      editing: false,
+      replying: false,
+      editedText: ''
     }
   },
   computed: {
@@ -150,19 +161,25 @@ app.component('comment', {
       return new Date(parseInt(this.created, 10) * 1000).toISOString()
     },
     canEdit() {
-      return true
+      let isRecent = new Date().getTime() - this.created < 1000 * 60 * 60 * 6 // 6 hours
+      return this.authorKey === this.user.key && isRecent
     },
-    canDelete() {
-      return false
+    keyLastDigits() {
+      return (this.authorKey || '').slice(-5)
+    },
+    keyColor() {
+      return hashbow(this.authorKey)
     }
   },
   template: `
-<div class="isso-comment isso-no-votes" :id="'isso-' + id" ref="this">
+<div class="ilno-comment ilno-no-votes" :id="'ilno-' + id" ref="this">
   <div class="text-wrapper">
-    <div class="isso-comment-header" role="meta">
-      <span class="author">{{ author }}</span>
+    <div class="ilno-comment-header" role="meta">
+      <span class="author name">{{ author }}</span>
       <span class="spacer">•</span>
-      <a class="permalink" href="#isso-1">
+      <span class="author key" :style="{color: keyColor}">{{ keyLastDigits }}</span>
+      <span class="spacer">•</span>
+      <a class="permalink" href="#ilno-1">
         <time :title="createdReadable" :datetime="createdISO">
           {{ createdHumanized }}
         </time>
@@ -170,22 +187,88 @@ app.component('comment', {
       <span v-if="mode === 2" class="note">{{ f.translate('comment-queued') }}</span>
       <span v-if="mode === 4" class="note">{{ f.translate('comment-deleted') }}</span>
     </div>
-    <div class="text"><p v-if="mode !== 4">{{ text }}</p></div>
-    <div class="isso-comment-footer">
-      <span class="votes">{{ votes }}</span>
-      <a class="upvote"><arrow-up /></a>
-      <span class="spacer">|</span>
-      <a class="downvote"><arrow-down /></a>
-      <a class="reply">{{ f.translate('comment-reply') }}</a>
-      <a v-if="canEdit" class="edit">{{ f.translate('comment-edit') }}</a>
-      <a v-if="canDelete" class="delete">{{ f.translate('comment-delete') }}</a>
+    <div :class="{'textarea-wrapper': editing, 'text': true}">
+      <div v-if="mode === 4"><!--- deleted ---></div>
+      <textarea v-else-if="editing" v-model="editedText"></textarea>
+      <p>{{ text }}</p>
     </div>
-    <div v-if="replies" class="isso-follow-up">
-      <thread :comments="replies" :id="id" />
+    <div class="ilno-comment-footer">
+      <span class="votes">{{ votes }}</span>
+      <a class="upvote" @click="upvote"><arrow-up /></a>
+      <span class="spacer">|</span>
+      <a class="downvote" @click="downvote"><arrow-down /></a>
+      <span v-if="deleting">
+        <a class="delete" @click="deleteConfirm">{{ f.translate('comment-confirm') }}</a>
+        <a class="delete" @click="deleteCancel">{{ f.translate('comment-cancel') }}</a>
+      </span>
+      <span v-else-if="editing">
+        <a class="delete" @click="deletePrepare">{{ f.translate('comment-delete') }}</a>
+        <a class="edit" @click="editSave">{{ f.translate('comment-save') }}</a>
+        <a class="edit" @click="editCancel">{{ f.translate('comment-cancel') }}</a>
+      </span>
+      <span v-else>
+        <a class="reply" @click="reply">{{ f.translate('comment-reply') }}</a>
+        <a v-if="canEdit" class="edit" @click="editStart">{{ f.translate('comment-edit') }}</a>
+        <a v-if="canEdit" class="delete" @click="deletePrepare">{{ f.translate('comment-delete') }}</a>
+      </span>
+    </div>
+    <postbox :user="user" v-if="replying" :parent="id" @created="handleNewReply" />
+    <div v-if="replies" class="ilno-follow-up">
+      <thread :comments="replies" :id="id" :user="user" />
     </div>
   </div>
 </div>
   `,
+  methods: {
+    upvote() {
+      api.like(this.id).then(r => {
+        this.votes = r.likes - r.dislikes
+      })
+    },
+    downvote() {
+      api.dislike(this.id).then(r => {
+        this.votes = r.likes - r.dislikes
+      })
+    },
+    editStart() {
+      this.editedText = this.text
+      this.editing = true
+    },
+    editSave() {
+      this.editing = false
+      api.modify(this.id, {text: this.editedText}).then(r => {
+        this.text = r.text
+      })
+    },
+    editCancel() {
+      this.editing = false
+    },
+    deletePrepare() {
+      this.deleting = true
+    },
+    deleteCancel() {
+      this.deleting = false
+    },
+    deleteConfirm() {
+      this.deleting = false
+      api.remove(this.id).then(r => {
+        console.log('deleted', r)
+
+        // if (rv) {
+        //   el.remove()
+        // } else {
+        //   $('span.note', header).textContent = i18n.translate('comment-deleted')
+        //   text.innerHTML = '<p>&nbsp;</p>'
+        //   $('a.edit', footer).remove()
+        //   $('a.delete', footer).remove()
+        // }
+        // del.textContent = i18n.translate('comment-delete')
+      })
+    },
+    reply() {
+      this.replying = true
+    }
+  },
   mounted() {
     // update datetime every 60 seconds
     setInterval(() => {
@@ -193,12 +276,12 @@ app.component('comment', {
         globals.offset.localTime(),
         new Date(parseInt(this.created, 10) * 1000)
       )
-    }, 60000)
+    }, 6000)
 
     // scroll into view
     if (
       window.location.hash.length > 0 &&
-      window.location.hash.match('^#isso-[0-9]+$')
+      window.location.hash.match('^#ilno-[0-9]+$')
     ) {
       this.$refs.this.scrollIntoView()
     }
@@ -231,35 +314,48 @@ app.component('root', {
       {{ lnurlauth }}
     </p>
   </div>
-  <postbox v-else :user="user" />
-  <div id="isso-root">
-    <thread :comments="comments" :id="0" />
+  <postbox v-else :user="user" @created="handleNewComment" />
+  <div id="ilno-root">
+    <thread :comments="comments" :id="0" :user="user" />
   </div>
 </div>
   `,
-  mounted() {
-    // wait for login from wallet
-    lnurl.listen(user => {
-      this.user = {...user}
-    })
+  methods: {
+    handleNewComment() {
+      this.fetchComments()
+    },
+    fetchComments() {
+      api.fetch().then(
+        resp => {
+          this.count = resp.total_replies
+          this.comments = (resp.replies || []).sort(
+            (a, b) => b.created - a.created
+          )
 
-    // fetch comments
-    api.fetch(config['max-comments-top'], config['max-comments-nested']).then(
-      resp => {
-        this.count = resp.total_replies
-        this.comments = resp.replies.sort((a, b) => b.created - a.created)
-
-        if (resp.hidden_replies > 0) {
-          // TODO
+          if (resp.hidden_replies > 0) {
+            // TODO
+          }
+        },
+        err => {
+          console.log(err)
         }
-      },
-      err => {
-        console.log(err)
+      )
+    },
+    authListen() {
+      if (!this.user.key) {
+        // wait for login from wallet
+        lnurl.listen(user => {
+          this.user = {...user}
+        })
       }
-    )
+    }
+  },
+  mounted() {
+    this.authListen()
+    this.fetchComments()
   }
 })
 
-window.Isso = {
+window.Ilno = {
   init: init
 }

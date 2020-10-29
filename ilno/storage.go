@@ -1,4 +1,4 @@
-package isso
+package ilno
 
 import (
 	"context"
@@ -39,8 +39,6 @@ type Storage interface {
 	ThreadStorage
 	CommentStorage
 	PreferenceStorage
-	NewCommentGuard(ctx context.Context, c Comment, uri string,
-		ratelimit int, directreply int, replytoself bool, maxage int) (bool, string)
 }
 
 // ThreadStorage handles all operations related to Thread and the database.
@@ -53,10 +51,10 @@ type ThreadStorage interface {
 // CommentStorage handles all operations related to Comment and the database.
 type CommentStorage interface {
 	IsApprovedAuthor(ctx context.Context, email string) bool
-	NewComment(ctx context.Context, c Comment, threadID int64, remoteAddr string) (Comment, error)
+	NewComment(ctx context.Context, c Comment, threadID int64) (Comment, error)
 	GetComment(ctx context.Context, id int64) (Comment, error)
 	// CountReply return parent-count map, 0 mean null `parent`
-	CountReply(ctx context.Context, uri string, mode int, after float64) (map[int64]int64, error)
+	CountReply(ctx context.Context, uri string, mode int) (map[int64]int64, error)
 	FetchCommentsByURI(ctx context.Context, uri string, parent int64, mode int, orderBy string, asc bool) (map[int64][]Comment, error)
 	CountComment(ctx context.Context, uris []string) (map[string]int64, error)
 	EditComment(ctx context.Context, c Comment) (Comment, error)

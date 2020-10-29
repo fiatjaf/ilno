@@ -6,23 +6,23 @@ import (
 	"reflect"
 	"testing"
 
-	"wrong.wang/x/go-isso/isso"
+	"github.com/fiatjaf/ilno/ilno"
 )
 
 func TestDatabase_Thread(t *testing.T) {
 	t.Run("not exist", func(t *testing.T) {
 		got, err := db.GetThreadByURI(context.Background(), "/not-exist")
-		if !errors.Is(err, isso.ErrStorageNotFound) {
-			t.Errorf("Database.GetThreadByURI() error = %v, wantErr %v", err, isso.ErrStorageNotFound)
+		if !errors.Is(err, ilno.ErrStorageNotFound) {
+			t.Errorf("Database.GetThreadByURI() error = %v, wantErr %v", err, ilno.ErrStorageNotFound)
 			return
 		}
-		emptyt := isso.Thread{}
+		emptyt := ilno.Thread{}
 		if !reflect.DeepEqual(got, emptyt) {
 			t.Errorf("Database.GetThreadByURI() = %v, want %v", got, emptyt)
 		}
 
 		got, err = db.GetThreadByID(context.Background(), 1024)
-		if !errors.Is(err, isso.ErrStorageNotFound) {
+		if !errors.Is(err, ilno.ErrStorageNotFound) {
 			t.Errorf("Database.GetThreadByID() error = %v", err)
 			return
 		}
@@ -45,7 +45,7 @@ func TestDatabase_Thread(t *testing.T) {
 
 		_, err = db.NewThread(context.Background(), "/about", "")
 		if (err != nil) != true {
-			t.Errorf("Database.NewThread() need error %v, but got nil", isso.ErrInvalidParam)
+			t.Errorf("Database.NewThread() need error %v, but got nil", ilno.ErrInvalidParam)
 			return
 		}
 

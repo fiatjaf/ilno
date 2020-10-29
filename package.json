@@ -1,9 +1,10 @@
 {
   "devDependencies": {
-    "esbuild": "^0.7.21"
+    "esbuild": "^0.7.22"
   },
   "dependencies": {
     "bech32": "^1.1.4",
+    "hashbow": "^1.1.1",
     "pug-cli": "^1.0.0-alpha6",
     "qrcode": "^1.4.4",
     "vue": "^3.0.2"

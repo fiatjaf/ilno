@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/kr/pretty"
-	"wrong.wang/x/go-isso/event"
-	"wrong.wang/x/go-isso/isso"
-	"wrong.wang/x/go-isso/logger"
+	"github.com/fiatjaf/ilno/event"
+	"github.com/fiatjaf/ilno/ilno"
+	"github.com/fiatjaf/ilno/logger"
 )
 
 // Logger log notifications
@@ -21,11 +21,11 @@ func (l *Logger) Register(eb *event.Bus) {
 	eb.Subscribe("comments.activate", l.activateComment)
 }
 
-func (l *Logger) newThread(mt isso.Thread) {
+func (l *Logger) newThread(mt ilno.Thread) {
 	logger.Info("new thread %s: %s", mt.ID, mt.Title)
 }
 
-func (l *Logger) newComment(c isso.Comment) {
+func (l *Logger) newComment(c ilno.Comment) {
 	logger.Info(fmt.Sprintf("create comment %# v", pretty.Formatter(c)))
 }
 

@@ -1,28 +1,26 @@
-package isso
+package ilno
 
 import (
 	"context"
-	"crypto/sha1"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/fiatjaf/go-lnurl"
+	"github.com/fiatjaf/ilno/extract"
+	"github.com/fiatjaf/ilno/response/json"
+	"github.com/fiatjaf/ilno/tool/bloomfilter"
+	"github.com/fiatjaf/ilno/tool/validator"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/schema"
-	"wrong.wang/x/go-isso/extract"
-	"wrong.wang/x/go-isso/response/json"
-	"wrong.wang/x/go-isso/tool/bloomfilter"
-	"wrong.wang/x/go-isso/tool/validator"
 )
 
 const maxlikeanddislikes = 142
 
 // CreateComment create a new comment
-func (isso *ISSO) CreateComment() http.HandlerFunc {
+func (ilno *ILNO) CreateComment() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		requestID := RequestIDFromContext(r.Context())
 		commentOrigin := FindOrigin(r)
@@ -45,22 +43,10 @@ func (isso *ISSO) CreateComment() http.HandlerFunc {
 		}
 
 		comment.URI = mux.Vars(r)["uri"]
-		comment.RemoteAddr = findClientIP(r)
-		if err := validator.Validate(comment); err != nil {
-			json.BadRequest(requestID, w, err, fmt.Sprintf("comment validate failed: %s", err.Error()))
-			return
-		}
-		if comment.Website != nil && (strings.HasPrefix(*comment.Website, "https://") || strings.HasPrefix(*comment.Website, "http://")) {
-			*comment.Website = "http://" + *comment.Website
-		}
-
-		ok, reason := isso.newCommentGuard(r.Context(), comment.Comment, comment.URI)
-		if !ok {
-			json.Forbidden(requestID, w, nil, reason)
-		}
+		comment.Key = comment.Key
 
 		var thread Thread
-		thread, err = isso.storage.GetThreadByURI(r.Context(), comment.URI)
+		thread, err = ilno.storage.GetThreadByURI(r.Context(), comment.URI)
 		if err != nil {
 			if errors.Is(err, ErrStorageNotFound) {
 				// no thread realted to this uri
@@ -74,11 +60,11 @@ func (isso *ISSO) CreateComment() http.HandlerFunc {
 						return
 					}
 				}
-				if thread, err = isso.storage.NewThread(r.Context(), comment.URI, comment.Title); err != nil {
+				if thread, err = ilno.storage.NewThread(r.Context(), comment.URI, comment.Title); err != nil {
 					json.ServerError(requestID, w, err, descStorageUnhandledError)
 					return
 				}
-				isso.tools.event.Publish("comments.new:new-thread", thread)
+				ilno.tools.event.Publish("comments.new:new-thread", thread)
 			} else {
 				// can not handled error
 				json.ServerError(requestID, w, err, descStorageUnhandledError)
@@ -86,31 +72,20 @@ func (isso *ISSO) CreateComment() http.HandlerFunc {
 			}
 		}
 
-		isso.tools.event.Publish("comments.new:before-save", thread)
+		ilno.tools.event.Publish("comments.new:before-save", thread)
 
-		if isso.config.Moderation.Enable {
-			if isso.config.Moderation.ApproveAcquaintance &&
-				comment.Email != nil &&
-				isso.storage.IsApprovedAuthor(r.Context(), *comment.Email) {
-				comment.Mode = ModePublic
-			} else {
-				comment.Mode = ModeAccepted
-			}
-		} else {
-			comment.Mode = ModePublic
-		}
-		c, err := isso.storage.NewComment(r.Context(), comment.Comment, thread.ID, comment.RemoteAddr)
+		comment.Mode = ModePublic
+
+		c, err := ilno.storage.NewComment(r.Context(), comment.Comment, thread.ID)
 		if err != nil {
 			json.ServerError(requestID, w, err, descStorageUnhandledError)
 			return
 		}
-		isso.tools.event.Publish("comments.new:after-save", thread, c)
+		ilno.tools.event.Publish("comments.new:after-save", thread, c)
 
-		reply, _ := c.convert(false, isso.tools.hash, isso.tools.markdown)
+		reply := reply{Comment: c}
 
-		isso.tools.event.Publish("comments.new:finish", thread, c)
-
-		isso.setcookie(c, w, false)
+		ilno.tools.event.Publish("comments.new:finish", thread, c)
 
 		if c.Mode == ModeAccepted {
 			json.Accepted(w, reply)
@@ -120,45 +95,21 @@ func (isso *ISSO) CreateComment() http.HandlerFunc {
 	}
 }
 
-func (isso *ISSO) newCommentGuard(ctx context.Context, c Comment, uri string) (bool, string) {
-	if !isso.config.Server.Guard.Enable {
-		return true, ""
-	}
-	if isso.config.Server.Guard.RequireEmail && c.Email == nil {
-		return false, "email address required but not provided"
-	}
-	if isso.config.Server.Guard.RequireAuthor && c.Author == "" {
-		return false, "author address required but not provided"
-	}
-
-	g := isso.config.Server.Guard
-	return isso.storage.NewCommentGuard(ctx, c, uri, g.RateLimit, g.DirectReply, g.ReplyToSelf, isso.config.MaxAge)
-}
-
 // FetchComments fetch all related comments
-func (isso *ISSO) FetchComments() http.HandlerFunc {
+func (ilno *ILNO) FetchComments() http.HandlerFunc {
 	type urlParm struct {
-		Parent      *int64  `schema:"parent"`
-		Limit       int64   `schema:"limit"`
-		NestedLimit int64   `schema:"nested_limit"`
-		After       float64 `schema:"after"`
-		Plain       int64   `schema:"plain"`
+		Parent *int64 `schema:"parent"`
 	}
 	decoder := schema.NewDecoder()
 	decoder.IgnoreUnknownKeys(true)
 
-	makeReplies := func(cs []Comment, after float64, limit int64, plain bool) []reply {
+	makeReplies := func(cs []Comment) []reply {
 		var replies []reply
 		var count int64
-		if limit <= 0 {
-			limit = int64(len(cs) + 1)
-		}
 		for _, c := range cs {
-			if c.Created > after && count < limit {
-				count++
-				r, _ := c.convert(plain, isso.tools.hash, isso.tools.markdown)
-				replies = append(replies, r)
-			}
+			count++
+			reply := reply{Comment: c}
+			replies = append(replies, reply)
 		}
 		return replies
 	}
@@ -177,12 +128,9 @@ func (isso *ISSO) FetchComments() http.HandlerFunc {
 		} else {
 			parent = *urlparm.Parent
 		}
-		var plain bool
-		if urlparm.Plain != 0 {
-			plain = true
-		}
 
-		replyCount, err := isso.storage.CountReply(r.Context(), mux.Vars(r)["uri"], ModePublic, urlparm.After)
+		replyCount, err := ilno.storage.CountReply(r.Context(), mux.Vars(r)["uri"],
+			ModePublic)
 		if err != nil {
 			json.ServerError(requestID, w, err, descStorageUnhandledError)
 			return
@@ -192,7 +140,8 @@ func (isso *ISSO) FetchComments() http.HandlerFunc {
 			replyCount[parent] = 0
 		}
 
-		commentsByParent, err := isso.storage.FetchCommentsByURI(r.Context(), mux.Vars(r)["uri"], parent, ModePublic, "id", true)
+		commentsByParent, err := ilno.storage.FetchCommentsByURI(r.Context(),
+			mux.Vars(r)["uri"], parent, ModePublic, "id", true)
 		if err != nil {
 			json.ServerError(requestID, w, err, descStorageUnhandledError)
 			return
@@ -211,7 +160,7 @@ func (isso *ISSO) FetchComments() http.HandlerFunc {
 			// parent == -1 means need all comment's, here TotalReplies means top-leval comments
 			rJSON.TotalReplies = replyCount[0]
 
-			rJSON.Replies = makeReplies(commentsByParent[0], urlparm.After, urlparm.Limit, plain)
+			rJSON.Replies = makeReplies(commentsByParent[0])
 			rJSON.HiddenReplies = rJSON.TotalReplies - int64(len(rJSON.Replies))
 			var zero int64
 			emptyarray := make([]reply, 0)
@@ -222,7 +171,7 @@ func (isso *ISSO) FetchComments() http.HandlerFunc {
 					rJSON.Replies[i].Replies = &emptyarray
 					rJSON.Replies[i].HiddenReplies = &zero
 				} else {
-					replies := makeReplies(commentsByParent[rJSON.Replies[i].ID], urlparm.After, urlparm.NestedLimit, plain)
+					replies := makeReplies(commentsByParent[rJSON.Replies[i].ID])
 					rJSON.Replies[i].TotalReplies = &count
 					rJSON.Replies[i].Replies = &replies
 					cc := *rJSON.Replies[i].TotalReplies - int64(len(*rJSON.Replies[i].Replies))
@@ -232,7 +181,7 @@ func (isso *ISSO) FetchComments() http.HandlerFunc {
 
 		} else if parent > 0 {
 			rJSON.TotalReplies = replyCount[parent]
-			rJSON.Replies = makeReplies(commentsByParent[parent], urlparm.After, urlparm.Limit, plain)
+			rJSON.Replies = makeReplies(commentsByParent[parent])
 			rJSON.HiddenReplies = rJSON.TotalReplies - int64(len(rJSON.Replies))
 		} else {
 			// parent = 0 not exist
@@ -245,7 +194,7 @@ func (isso *ISSO) FetchComments() http.HandlerFunc {
 }
 
 // CountComment return every thread's comment amount
-func (isso *ISSO) CountComment() http.HandlerFunc {
+func (ilno *ILNO) CountComment() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		requestID := RequestIDFromContext(r.Context())
 		uris := []string{}
@@ -261,7 +210,7 @@ func (isso *ISSO) CountComment() http.HandlerFunc {
 			return
 		}
 
-		countsByURI, err := isso.storage.CountComment(r.Context(), uris)
+		countsByURI, err := ilno.storage.CountComment(r.Context(), uris)
 		if err != nil {
 			json.ServerError(requestID, w, err, descStorageUnhandledError)
 			return
@@ -274,7 +223,7 @@ func (isso *ISSO) CountComment() http.HandlerFunc {
 }
 
 // ViewComment return specific comment
-func (isso *ISSO) ViewComment() http.HandlerFunc {
+func (ilno *ILNO) ViewComment() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		requestID := RequestIDFromContext(req.Context())
 		id, err := strconv.ParseInt(mux.Vars(req)["id"], 10, 64)
@@ -283,12 +232,7 @@ func (isso *ISSO) ViewComment() http.HandlerFunc {
 			return
 		}
 
-		var plain bool
-		if req.URL.Query().Get("plain") == "0" {
-			plain = true
-		}
-
-		comment, err := isso.storage.GetComment(req.Context(), id)
+		comment, err := ilno.storage.GetComment(req.Context(), id)
 		if err != nil {
 			if errors.Is(err, ErrStorageNotFound) {
 				json.NotFound(requestID, w, err, descStorageNotFound)
@@ -298,29 +242,30 @@ func (isso *ISSO) ViewComment() http.HandlerFunc {
 			return
 		}
 
-		r, _ := comment.convert(plain, isso.tools.hash, isso.tools.markdown)
-		json.OK(w, r)
+		reply := reply{Comment: comment}
+		json.OK(w, reply)
 	}
 }
 
 // EditComment edit an existing comment.
-// Editing a comment is only possible for a short period of time after it was created and only if the requestor has a valid cookie for it.
-// Editing a comment will set a new edit cookie in the response.
-func (isso *ISSO) EditComment() http.HandlerFunc {
-
+// Editing a comment is only possible for a short period of time after it was created and only if the requestor has a valid lnurl-auth key for it.
+func (ilno *ILNO) EditComment() http.HandlerFunc {
 	type editInput struct {
-		Text    string  `json:"text"  validate:"required,gte=3,lte=65535"`
-		Author  *string `json:"author"  validate:"omitempty,gte=1,lte=15"`
-		Email   *string `json:"email"  validate:"omitempty,email"`
-		Website *string `json:"website"  validate:"omitempty,url"`
+		Text   string  `json:"text"  validate:"required,gte=3,lte=65535"`
+		Author *string `json:"author"  validate:"omitempty,gte=1,lte=15"`
+		Key    string  `json:"key"`
+		Sig    string  `json:"sig"`
+		K1     string  `json:"k1"`
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		requestID := RequestIDFromContext(r.Context())
-		comment, ok := isso.checkcookies(w, r)
-		if !ok {
+		cid, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+		if err != nil {
+			json.BadRequest(requestID, w, err, descRequestInvalidParm)
 			return
 		}
+
 		var ei editInput
 		if err := jsonBind(r.Body, &ei); err != nil {
 			json.BadRequest(requestID, w, err, descRequestInvalidParm)
@@ -331,35 +276,49 @@ func (isso *ISSO) EditComment() http.HandlerFunc {
 			return
 		}
 
+		comment, err := ilno.storage.GetComment(r.Context(), cid)
+		if err != nil {
+			if errors.Is(err, ErrStorageNotFound) {
+				json.NotFound(requestID, w, err, descStorageNotFound)
+				return
+			}
+			json.ServerError(requestID, w, err, descStorageUnhandledError)
+			return
+		}
+
+		if comment.Key != ei.Key {
+			json.Unauthorized(requestID, w, err, fmt.Sprintf("key doesn't match"))
+			return
+		}
+
+		ok, err := lnurl.VerifySignature(ei.K1, ei.Sig, ei.Key)
+		if !ok {
+			json.Unauthorized(requestID, w, err, fmt.Sprintf("signature doesn't match: %s", err.Error()))
+			return
+		}
+
 		comment.Text = ei.Text
 		if ei.Author != nil {
 			comment.Author = *ei.Author
 		}
-		if ei.Email != nil {
-			comment.Email = ei.Email
-		}
-		if ei.Website != nil {
-			comment.Website = ei.Website
-		}
 		comment.Modified = new(float64)
 		*comment.Modified = float64(time.Now().UnixNano()) / float64(1e9)
 
-		c, err := isso.storage.EditComment(r.Context(), comment)
+		c, err := ilno.storage.EditComment(r.Context(), comment)
 		if err != nil {
 			json.ServerError(requestID, w, err, descStorageUnhandledError)
 			return
 		}
 
-		isso.tools.event.Publish("comments.edit", c)
+		ilno.tools.event.Publish("comments.edit", c)
 
-		reply, _ := c.convert(false, isso.tools.hash, isso.tools.markdown)
-		isso.setcookie(c, w, false)
+		reply := reply{Comment: c}
 		json.OK(w, reply)
 	}
 }
 
 // VoteComment used to like or dislike comment
-func (isso *ISSO) VoteComment() http.HandlerFunc {
+func (ilno *ILNO) VoteComment() http.HandlerFunc {
 	type vresponse struct {
 		Likes    int    `json:"likes"`
 		Dislikes int    `json:"dislikes"`
@@ -382,7 +341,7 @@ func (isso *ISSO) VoteComment() http.HandlerFunc {
 			return
 		}
 
-		c, err := isso.storage.GetComment(r.Context(), cid)
+		c, err := ilno.storage.GetComment(r.Context(), cid)
 		if err != nil {
 			if errors.Is(err, ErrStorageNotFound) {
 				json.NotFound(requestID, w, err, descStorageNotFound)
@@ -411,7 +370,7 @@ func (isso *ISSO) VoteComment() http.HandlerFunc {
 		bf.Add([]byte(remoteAddr))
 		c.Voters = bf.Buffer()
 
-		err = isso.storage.VoteComment(r.Context(), c, upvote)
+		err = ilno.storage.VoteComment(r.Context(), c, upvote)
 		if err != nil {
 			json.ServerError(requestID, w, err, descStorageUnhandledError)
 			return
@@ -428,100 +387,57 @@ func (isso *ISSO) VoteComment() http.HandlerFunc {
 }
 
 // DeleteComment delete a comment
-func (isso *ISSO) DeleteComment() http.HandlerFunc {
+func (ilno *ILNO) DeleteComment() http.HandlerFunc {
+	type deleteInput struct {
+		Key string `json:"key"`
+		Sig string `json:"sig"`
+		K1  string `json:"k1"`
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		requestID := RequestIDFromContext(r.Context())
-
-		comment, ok := isso.checkcookies(w, r)
-		if !ok {
+		cid, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+		if err != nil {
+			json.BadRequest(requestID, w, err, descRequestInvalidParm)
 			return
 		}
-		comment, err := isso.storage.DeleteComment(r.Context(), comment.ID)
+
+		comment, err := ilno.storage.GetComment(r.Context(), cid)
+		if err != nil {
+			if errors.Is(err, ErrStorageNotFound) {
+				json.NotFound(requestID, w, err, descStorageNotFound)
+				return
+			}
+			json.ServerError(requestID, w, err, descStorageUnhandledError)
+			return
+		}
+
+		var ei deleteInput
+		if err := jsonBind(r.Body, &ei); err != nil {
+			json.BadRequest(requestID, w, err, descRequestInvalidParm)
+			return
+		}
+
+		if comment.Key != ei.Key {
+			json.Unauthorized(requestID, w, err, fmt.Sprintf("key doesn't match"))
+			return
+		}
+
+		ok, err := lnurl.VerifySignature(ei.K1, ei.Sig, ei.Key)
+		if !ok {
+			json.Unauthorized(requestID, w, err, fmt.Sprintf("signature doesn't match: %s", err.Error()))
+			return
+		}
+
+		comment, err = ilno.storage.DeleteComment(r.Context(), comment.ID)
 		if err != nil {
 			json.ServerError(requestID, w, err, descStorageUnhandledError)
 			return
 		}
 
-		isso.tools.event.Publish("comments.delete", comment.ID)
+		ilno.tools.event.Publish("comments.delete", comment.ID)
 
-		reply, _ := comment.convert(false, isso.tools.hash, isso.tools.markdown)
-		isso.setcookie(comment, w, true)
+		reply := reply{Comment: comment}
 		json.OK(w, reply)
-	}
-}
-
-func (isso *ISSO) checkcookies(w http.ResponseWriter, r *http.Request) (Comment, bool) {
-	requestID := RequestIDFromContext(r.Context())
-	cid, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
-	if err != nil {
-		json.BadRequest(requestID, w, err, descRequestInvalidParm)
-		return Comment{}, false
-	}
-
-	var c Comment
-	if cookie, err := r.Cookie(fmt.Sprintf("%v", cid)); err == nil {
-		cvalue := make(map[int64][20]byte)
-		if err = isso.tools.securecookie.Decode(fmt.Sprintf("%v", cid), cookie.Value, &cvalue); err == nil {
-			if h, ok := cvalue[cid]; ok {
-				if c, err = isso.storage.GetComment(r.Context(), cid); err == nil {
-					if h == sha1.Sum([]byte(c.Text)) {
-						return c, true
-					}
-				} else {
-					if errors.Is(err, ErrStorageNotFound) {
-						json.NotFound(requestID, w, err, descStorageNotFound)
-						return Comment{}, false
-					}
-					json.ServerError(requestID, w, err, descStorageUnhandledError)
-					return Comment{}, false
-				}
-			}
-		}
-	}
-	json.Forbidden(requestID, w, err, descRequestInvalidCookies)
-	return Comment{}, false
-}
-
-func (isso *ISSO) setcookie(c Comment, w http.ResponseWriter, delete bool) {
-	if delete {
-		cookie := &http.Cookie{
-			Name:   fmt.Sprintf("%v", c.ID),
-			Path:   "/",
-			MaxAge: -1,
-			Secure: true,
-		}
-		http.SetCookie(w, cookie)
-
-		cookie = &http.Cookie{
-			Name:   fmt.Sprintf("isso-%v", c.ID),
-			Path:   "/",
-			MaxAge: -1,
-			Secure: true,
-		}
-		if v := cookie.String(); v != "" {
-			w.Header().Add("X-Set-Cookie", v)
-		}
-		return
-	}
-	if encoded, err := isso.tools.securecookie.Encode(fmt.Sprintf("%v", c.ID),
-		map[int64][20]byte{c.ID: sha1.Sum([]byte(c.Text))}); err == nil {
-		cookie := &http.Cookie{
-			Name:   fmt.Sprintf("%v", c.ID),
-			Value:  encoded,
-			Path:   "/",
-			MaxAge: isso.config.MaxAge,
-			Secure: true,
-		}
-		http.SetCookie(w, cookie)
-		cookie = &http.Cookie{
-			Name:   fmt.Sprintf("isso-%v", c.ID),
-			Value:  encoded,
-			Path:   "/",
-			MaxAge: isso.config.MaxAge,
-			Secure: true,
-		}
-		if v := cookie.String(); v != "" {
-			w.Header().Add("X-Set-Cookie", v)
-		}
 	}
 }

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"wrong.wang/x/go-isso/version"
+	"github.com/fiatjaf/ilno/version"
 )
 
 var requestedLevel = InfoLevel

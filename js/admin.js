@@ -24,16 +24,16 @@ function fade(element) {
         op -= op * 0.1;
     }, 10);
 }
-function moderate(com_id, hash, action, isso_host_script) {
+function moderate(com_id, hash, action, ilno_host_script) {
   ajax({method: "POST",
-        url: isso_host_script + "/id/" + com_id + "/" + action + "/" + hash,
+        url: ilno_host_script + "/id/" + com_id + "/" + action + "/" + hash,
         success: function(){
-            fade(document.getElementById("isso-" + com_id));
+            fade(document.getElementById("ilno-" + com_id));
         }});
 }
-function edit(com_id, hash, author, email, website, comment, isso_host_script) {
+function edit(com_id, hash, author, email, website, comment, ilno_host_script) {
   ajax({method: "POST",
-        url: isso_host_script + "/id/" + com_id + "/edit/" + hash,
+        url: ilno_host_script + "/id/" + com_id + "/edit/" + hash,
         data: JSON.stringify({text: comment,
                               author: author,
                               email: email,
@@ -45,11 +45,11 @@ function edit(com_id, hash, author, email, website, comment, isso_host_script) {
           console.log("Error: ", ret); // TODO flash msg/notif
         }});
 }
-function validate_com(com_id, hash, isso_host_script) {
-    moderate(com_id, hash, "activate", isso_host_script);
+function validate_com(com_id, hash, ilno_host_script) {
+    moderate(com_id, hash, "activate", ilno_host_script);
 }
-function delete_com(com_id, hash, isso_host_script) {
-    moderate(com_id, hash, "delete", isso_host_script);
+function delete_com(com_id, hash, ilno_host_script) {
+    moderate(com_id, hash, "delete", ilno_host_script);
 }
 function unset_editable(elt_id) {
     var elt = document.getElementById(elt_id);
@@ -66,10 +66,10 @@ function set_editable(elt_id) {
     }
 }
 function start_edit(com_id) {
-    var editable_elements = ['isso-author-' + com_id,
-                             'isso-email-' + com_id,
-                             'isso-website-' + com_id,
-                             'isso-text-' + com_id];
+    var editable_elements = ['ilno-author-' + com_id,
+                             'ilno-email-' + com_id,
+                             'ilno-website-' + com_id,
+                             'ilno-text-' + com_id];
     for (var idx=0; idx <= editable_elements.length; idx++) {
         set_editable(editable_elements[idx]);
     }
@@ -78,10 +78,10 @@ function start_edit(com_id) {
     document.getElementById('send-edit-btn-' + com_id).classList.toggle('hidden');
 }
 function stop_edit(com_id) {
-    var editable_elements = ['isso-author-' + com_id,
-                             'isso-email-' + com_id,
-                             'isso-website-' + com_id,
-                             'isso-text-' + com_id];
+    var editable_elements = ['ilno-author-' + com_id,
+                             'ilno-email-' + com_id,
+                             'ilno-website-' + com_id,
+                             'ilno-text-' + com_id];
     for (var idx=0; idx <= editable_elements.length; idx++) {
         unset_editable(editable_elements[idx]);
     }
@@ -89,12 +89,12 @@ function stop_edit(com_id) {
     document.getElementById('stop-edit-btn-' + com_id).classList.toggle('hidden');
     document.getElementById('send-edit-btn-' + com_id).classList.toggle('hidden');
 }
-function send_edit(com_id, hash, isso_host_script) {
-    var author = document.getElementById('isso-author-' + com_id).textContent;
-    var email = document.getElementById('isso-email-' + com_id).textContent;
-    var website = document.getElementById('isso-website-' + com_id).textContent;
-    var comment = document.getElementById('isso-text-' + com_id).textContent;
-    edit(com_id, hash, author, email, website, comment, isso_host_script);
+function send_edit(com_id, hash, ilno_host_script) {
+    var author = document.getElementById('ilno-author-' + com_id).textContent;
+    var email = document.getElementById('ilno-email-' + com_id).textContent;
+    var website = document.getElementById('ilno-website-' + com_id).textContent;
+    var comment = document.getElementById('ilno-text-' + com_id).textContent;
+    edit(com_id, hash, author, email, website, comment, ilno_host_script);
     stop_edit(com_id);
 }
 

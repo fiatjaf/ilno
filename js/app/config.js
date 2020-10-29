@@ -31,7 +31,7 @@ var js = document.getElementsByTagName('script')
 for (var i = 0; i < js.length; i++) {
   for (var j = 0; j < js[i].attributes.length; j++) {
     var attr = js[i].attributes[j]
-    if (/^data-isso-/.test(attr.name)) {
+    if (/^data-ilno-/.test(attr.name)) {
       try {
         config[attr.name.substring(10)] = JSON.parse(attr.value)
       } catch (ex) {

@@ -1,9 +1,23 @@
 package main
 
 import (
-	"wrong.wang/x/go-isso/cli"
+	"github.com/fiatjaf/ilno/config"
+	"github.com/fiatjaf/ilno/logger"
+	"github.com/fiatjaf/ilno/server"
+	"github.com/kelseyhightower/envconfig"
 )
 
 func main() {
-	cli.Parse()
+	var s config.Config
+	err := envconfig.Process("", &s)
+	if err != nil {
+		logger.Fatal("couldn't process envconfig: %s", err)
+	}
+
+	switch s.LogLevel {
+	case "DEBUG":
+		logger.EnableDebug()
+	}
+
+	server.Serve(s)
 }

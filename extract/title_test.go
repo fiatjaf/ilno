@@ -13,10 +13,10 @@ var (
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>isso fake</title>
+    <title>ilno fake</title>
 </head>
 <body>
-	<div id=isso-thread data-title=isso data-isso-id=/new/ >
+	<div id=ilno-thread data-title=ilno data-ilno-id=/new/ >
 </body>
 </html>
 	`
@@ -26,10 +26,10 @@ var (
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>isso fake</title>
+    <title>ilno fake</title>
 </head>
 <body>
-	<div id=isso-thread data-title=isso ></div>
+	<div id=ilno-thread data-title=ilno ></div>
 </body>
 </html>
 	`
@@ -39,10 +39,10 @@ var (
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>isso</title>
+    <title>ilno</title>
 </head>
 <body>
-	<div id=isso-thread></div>
+	<div id=ilno-thread></div>
 </body>
 </html>
 	`
@@ -54,7 +54,7 @@ var (
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
-	<div id=isso-thread></div>
+	<div id=ilno-thread></div>
 </body>
 </html>
 	`
@@ -75,10 +75,10 @@ var (
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>isso</title>
+    <title>ilno</title>
 </head>
 <body>
-	<div id=isso-thread></div>
+	<div id=ilno-thread></div>
 	<div
 	<p></span>
 </body>
@@ -99,12 +99,12 @@ func TestTitleAndThreadURI(t *testing.T) {
 		wantURI   string
 		wantErr   bool
 	}{
-		{"all", args{strings.NewReader(allHTML), "Untitled", "/"}, "isso", "/new/", false},
-		{"withoutDID", args{strings.NewReader(withoutDIDHTML), "Untitled", "/"}, "isso", "/", false},
-		{"withoutDT", args{strings.NewReader(withoutDTHTML), "Untitled", "/"}, "isso", "/", false},
+		{"all", args{strings.NewReader(allHTML), "Untitled", "/"}, "ilno", "/new/", false},
+		{"withoutDID", args{strings.NewReader(withoutDIDHTML), "Untitled", "/"}, "ilno", "/", false},
+		{"withoutDT", args{strings.NewReader(withoutDTHTML), "Untitled", "/"}, "ilno", "/", false},
 		{"withoutTitle", args{strings.NewReader(withoutTitleHTML), "Untitled", "/"}, "Untitled", "/", false},
 		{"withoutRoot", args{strings.NewReader(withoutRootHTML), "Untitled", "/"}, "Untitled", "/", true},
-		{"Invalid", args{strings.NewReader(InvalidHTML), "Untitled", "/"}, "isso", "/", false},
+		{"Invalid", args{strings.NewReader(InvalidHTML), "Untitled", "/"}, "ilno", "/", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

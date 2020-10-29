@@ -6,13 +6,13 @@ export default function () {
   var objs = {}
 
   $.each('a', function (el) {
-    if (!el.href.match || !el.href.match(/#isso-thread$/)) {
+    if (!el.href.match || !el.href.match(/#ilno-thread$/)) {
       return
     }
 
     var tid =
-      el.getAttribute('data-isso-id') ||
-      el.href.match(/^(.+)#isso-thread$/)[1].replace(/^.*\/\/[^\/]+/, '')
+      el.getAttribute('data-ilno-id') ||
+      el.href.match(/^(.+)#ilno-thread$/)[1].replace(/^.*\/\/[^\/]+/, '')
 
     if (tid in objs) {
       objs[tid].push(el)
