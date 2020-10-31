@@ -1,6 +1,7 @@
 import * as Vue from 'vue/dist/vue.esm-bundler.js'
 import QRCode from 'qrcode'
 import hashbow from 'hashbow'
+import marked from 'marked'
 
 import domready from './app/lib/ready'
 import globals from './app/globals'
@@ -60,7 +61,7 @@ app.component('arrow-up', {
 })
 
 app.component('postbox', {
-  props: ['parent', 'user'],
+  props: ['parent', 'user', 'cancellable', 'autofocus'],
   data() {
     return {
       lnurlauth: lnurl.encode(lnurl.authURL),
@@ -71,7 +72,11 @@ app.component('postbox', {
 <div class="ilno-postbox">
   <form @submit="postComment">
     <div class="textarea-wrapper">
-      <textarea :placeholder="f.translate('postbox-text')" v-model="text"></textarea>
+      <textarea
+        :placeholder="f.translate('postbox-text')"
+        v-model="text"
+        :autofocus="autofocus"
+    ></textarea>
     </div>
     <section class="auth-section">
       <p class="input-wrapper">
@@ -99,7 +104,7 @@ app.component('postbox', {
         })
         .then(comment => {
           this.text = ''
-          this.$emit('created')
+          this.$emit('posted', comment)
 
           utils.localStorage.setItem('stored-user', JSON.stringify(this.user))
         })
@@ -132,11 +137,11 @@ app.component('comment', {
   props: [
     'user',
     'id',
+    'parent',
     'created',
     'authorKey',
     'author',
     'text',
-    'votes',
     'replies',
     'mode',
     'likes',
@@ -146,14 +151,31 @@ app.component('comment', {
   ],
   data() {
     return {
+      votes: this.likes - this.dislikes,
       createdHumanized: '',
       deleting: false,
       editing: false,
       replying: false,
-      editedText: ''
+      editedText: '',
+      newText: null,
+      newReplies: [],
+      newMode: null,
+      fullyErased: false
     }
   },
   computed: {
+    actualText() {
+      return this.newText || this.text
+    },
+    formattedText() {
+      return marked(this.actualText)
+    },
+    actualReplies() {
+      return this.newReplies.concat(this.replies || [])
+    },
+    actualMode() {
+      return this.newMode || this.mode
+    },
     createdReadable() {
       return new Date(parseInt(this.created, 10) * 1000).toString()
     },
@@ -161,8 +183,16 @@ app.component('comment', {
       return new Date(parseInt(this.created, 10) * 1000).toISOString()
     },
     canEdit() {
-      let isRecent = new Date().getTime() - this.created < 1000 * 60 * 60 * 6 // 6 hours
+      let isRecent =
+        new Date().getTime() - parseInt(this.created) * 1000 <
+        1000 * 60 * 60 * 6 // 6 hours
       return this.authorKey === this.user.key && isRecent
+    },
+    canReply() {
+      // the server is dumb and only allows one level of comment nesting, so we
+      // rather not show the reply button for the third level since comments will
+      // be migrated to the second level anyway
+      return !this.parent
     },
     keyLastDigits() {
       return (this.authorKey || '').slice(-5)
@@ -172,54 +202,73 @@ app.component('comment', {
     }
   },
   template: `
-<div class="ilno-comment ilno-no-votes" :id="'ilno-' + id" ref="this">
+<div v-if="fullyErased"></div>
+<div v-else class="ilno-comment" :id="'ilno-' + id" ref="this">
   <div class="text-wrapper">
     <div class="ilno-comment-header" role="meta">
-      <span class="author name">{{ author }}</span>
-      <span class="spacer">•</span>
-      <span class="author key" :style="{color: keyColor}">{{ keyLastDigits }}</span>
-      <span class="spacer">•</span>
+      <span v-if="actualMode === 4">
+        <span class="spacer">×</span>
+      </span>
+      <span v-else>
+        <span class="author name">{{ author }}</span>
+        <span class="spacer">•</span>
+        <span class="author key" :style="{color: keyColor}">{{ keyLastDigits }}</span>
+        <span class="spacer" v-if="keyLastDigits.length">•</span>
+      </span>
       <a class="permalink" href="#ilno-1">
         <time :title="createdReadable" :datetime="createdISO">
           {{ createdHumanized }}
         </time>
       </a>
-      <span v-if="mode === 2" class="note">{{ f.translate('comment-queued') }}</span>
-      <span v-if="mode === 4" class="note">{{ f.translate('comment-deleted') }}</span>
+      <span v-if="actualMode === 2" class="note">{{ f.translate('comment-queued') }}</span>
+      <span v-if="actualMode === 4" class="note">{{ f.translate('comment-deleted') }}</span>
     </div>
     <div :class="{'textarea-wrapper': editing, 'text': true}">
-      <div v-if="mode === 4"><!--- deleted ---></div>
+      <div v-if="actualMode === 4"><!--- deleted ---></div>
       <textarea v-else-if="editing" v-model="editedText"></textarea>
-      <p>{{ text }}</p>
+      <div v-else v-html="formattedText" />
     </div>
     <div class="ilno-comment-footer">
-      <span class="votes">{{ votes }}</span>
+      <span class="votes" v-if="votes !== 0">{{ votes }}</span>
       <a class="upvote" @click="upvote"><arrow-up /></a>
       <span class="spacer">|</span>
       <a class="downvote" @click="downvote"><arrow-down /></a>
+      <span class="spacer">&nbsp;</span>
       <span v-if="deleting">
         <a class="delete" @click="deleteConfirm">{{ f.translate('comment-confirm') }}</a>
+        <span class="spacer">&nbsp;</span>
         <a class="delete" @click="deleteCancel">{{ f.translate('comment-cancel') }}</a>
       </span>
       <span v-else-if="editing">
         <a class="delete" @click="deletePrepare">{{ f.translate('comment-delete') }}</a>
+        <span class="spacer">&nbsp;</span>
         <a class="edit" @click="editSave">{{ f.translate('comment-save') }}</a>
+        <span class="spacer">&nbsp;</span>
         <a class="edit" @click="editCancel">{{ f.translate('comment-cancel') }}</a>
       </span>
+      <span v-else-if="replying">
+        <a class="reply" @click="replyCancel">{{ f.translate('comment-close') }}</a>
+      </span>
       <span v-else>
-        <a class="reply" @click="reply">{{ f.translate('comment-reply') }}</a>
+        <a v-if="canReply" class="reply" @click="reply">{{ f.translate('comment-reply') }}</a>
+        <span class="spacer">&nbsp;</span>
         <a v-if="canEdit" class="edit" @click="editStart">{{ f.translate('comment-edit') }}</a>
+        <span class="spacer">&nbsp;</span>
         <a v-if="canEdit" class="delete" @click="deletePrepare">{{ f.translate('comment-delete') }}</a>
       </span>
     </div>
-    <postbox :user="user" v-if="replying" :parent="id" @created="handleNewReply" />
-    <div v-if="replies" class="ilno-follow-up">
-      <thread :comments="replies" :id="id" :user="user" />
+    <postbox :user="user" v-if="replying" :parent="id" autofocus @posted="handleNewReply" />
+    <div v-if="actualReplies.length" class="ilno-follow-up">
+      <thread :comments="actualReplies" :id="id" :user="user" />
     </div>
   </div>
 </div>
   `,
   methods: {
+    handleNewReply(reply) {
+      this.replying = false
+      this.newReplies = [reply, ...this.newReplies]
+    },
     upvote() {
       api.like(this.id).then(r => {
         this.votes = r.likes - r.dislikes
@@ -231,14 +280,21 @@ app.component('comment', {
       })
     },
     editStart() {
-      this.editedText = this.text
+      this.editedText = this.actualText
       this.editing = true
     },
     editSave() {
       this.editing = false
-      api.modify(this.id, {text: this.editedText}).then(r => {
-        this.text = r.text
-      })
+      api
+        .modify(this.id, {
+          key: this.user.key,
+          k1: this.user.k1,
+          sig: this.user.sig,
+          text: this.editedText
+        })
+        .then(r => {
+          this.newText = r.text
+        })
     },
     editCancel() {
       this.editing = false
@@ -251,32 +307,37 @@ app.component('comment', {
     },
     deleteConfirm() {
       this.deleting = false
-      api.remove(this.id).then(r => {
-        console.log('deleted', r)
-
-        // if (rv) {
-        //   el.remove()
-        // } else {
-        //   $('span.note', header).textContent = i18n.translate('comment-deleted')
-        //   text.innerHTML = '<p>&nbsp;</p>'
-        //   $('a.edit', footer).remove()
-        //   $('a.delete', footer).remove()
-        // }
-        // del.textContent = i18n.translate('comment-delete')
-      })
+      api
+        .remove(this.id, {
+          key: this.user.key,
+          k1: this.user.k1,
+          sig: this.user.sig
+        })
+        .then(eraseTotally => {
+          if (eraseTotally) {
+            this.fullyErased = true
+          } else {
+            this.newMode = 4
+          }
+        })
     },
     reply() {
       this.replying = true
-    }
-  },
-  mounted() {
-    // update datetime every 60 seconds
-    setInterval(() => {
+    },
+    replyCancel() {
+      this.replying = false
+    },
+    updateHumanizedDate() {
       this.createdHumanized = utils.ago(
         globals.offset.localTime(),
         new Date(parseInt(this.created, 10) * 1000)
       )
-    }, 6000)
+    }
+  },
+  mounted() {
+    // update datetime every 60 seconds
+    setInterval(this.updateHumanizedDate, 60000)
+    this.updateHumanizedDate()
 
     // scroll into view
     if (
@@ -314,14 +375,14 @@ app.component('root', {
       {{ lnurlauth }}
     </p>
   </div>
-  <postbox v-else :user="user" @created="handleNewComment" />
+  <postbox v-else :user="user" @posted="handleNewComment" />
   <div id="ilno-root">
     <thread :comments="comments" :id="0" :user="user" />
   </div>
 </div>
   `,
   methods: {
-    handleNewComment() {
+    handleNewComment(x) {
       this.fetchComments()
     },
     fetchComments() {

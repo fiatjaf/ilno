@@ -94,6 +94,7 @@ export default {
 .ilno-comment > div.text-wrapper > .ilno-comment-header .author.key {
     font-weight: bold;
     color: #444;
+    font-family: monospace;
 }
 .ilno-comment > div.text-wrapper > .textarea-wrapper textarea,
 .ilno-comment > div.text-wrapper > div.text p {
@@ -146,10 +147,6 @@ export default {
 .ilno-comment .ilno-postbox {
     margin-top: 0.8em;
 }
-.ilno-comment.ilno-no-votes > * > .ilno-comment-footer span.votes {
-    display: none;
-}
-
 .ilno-postbox {
     max-width: 68em;
     margin: 0 auto 2em;
@@ -198,7 +195,7 @@ export default {
     float: right;
     margin: 0 0 0 5px;
 }
-.ilno-postbox > form > .auth-section .post-action > input {
+.ilno-postbox > form > .auth-section .post-action > button {
     padding: calc(.3em - 1px);
     border-radius: 2px;
     border: 1px solid #CCC;
@@ -208,10 +205,10 @@ export default {
     line-height: 1.4em;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
-.ilno-postbox > form > .auth-section .post-action > input:hover {
+.ilno-postbox > form > .auth-section .post-action > button:hover {
     background-color: #CCC;
 }
-.ilno-postbox > form > .auth-section .post-action > input:active {
+.ilno-postbox > form > .auth-section .post-action > button:active {
     background-color: #BBB;
 }
 .ilno-postbox > form > .notification-section {

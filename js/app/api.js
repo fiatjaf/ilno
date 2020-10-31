@@ -132,17 +132,22 @@ var modify = function (id, data) {
   return deferred.promise
 }
 
-var remove = function (id) {
+var remove = function (id, data) {
   var deferred = Q.defer()
-  curl('POST', endpoint + '/id/' + id + '/delete', null, function (rv) {
-    if (rv.status === 403) {
-      deferred.reject('Not authorized to delete this comment!')
-    } else if (rv.status === 200) {
-      deferred.resolve(JSON.parse(rv.body) === null)
-    } else {
-      deferred.reject(rv.body)
+  curl(
+    'POST',
+    endpoint + '/id/' + id + '/delete',
+    JSON.stringify(data),
+    function (rv) {
+      if (rv.status === 403) {
+        deferred.reject('Not authorized to delete this comment!')
+      } else if (rv.status === 200) {
+        deferred.resolve(JSON.parse(rv.body).id === 0)
+      } else {
+        deferred.reject(rv.body)
+      }
     }
-  })
+  )
   return deferred.promise
 }
 

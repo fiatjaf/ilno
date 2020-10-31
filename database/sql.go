@@ -58,7 +58,7 @@ var (
 		"comment_edit":         `UPDATE comments SET text=$1, author=$2, modified=$3 WHERE id=$4`,
 		"comment_delete_check": `SELECT COUNT(*) FROM comments WHERE parent=?`,
 		"comment_delete_hard":  `DELETE FROM comments WHERE id=?`,
-		"comment_delete_soft":  `UPDATE comments SET mode=4, text='', author='', website=NULL WHERE id=?`,
+		"comment_delete_soft":  `UPDATE comments SET mode=4, text='', author='', key='' WHERE id=?`,
 		"comment_delete_stale": `DELETE FROM comments 
 		WHERE mode=4 AND id NOT IN (SELECT parent FROM comments WHERE parent IS NOT NULL)`,
 		"comment_vote_set": `UPDATE comments SET likes=?, dislikes=?, voters=? WHERE id=?`,
