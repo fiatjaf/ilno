@@ -9,6 +9,7 @@ import (
 	"github.com/fiatjaf/ilno/config"
 	"github.com/fiatjaf/ilno/database"
 	"github.com/fiatjaf/ilno/ilno"
+	"github.com/fiatjaf/ilno/lnurl"
 	"github.com/fiatjaf/ilno/logger"
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
@@ -44,13 +45,16 @@ func setupHandler(cfg config.Config) http.Handler {
 	c := cors.New(cors.Options{
 		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowCredentials: true,
-		AllowedHeaders:   []string{"Origin", "Referer", "Content-Type"},
-		ExposedHeaders:   []string{"X-Set-Cookie", "Date"},
-		AllowedMethods:   []string{"HEAD", "GET", "POST", "PUT", "DELETE"},
-		Debug:            false,
+		AllowedHeaders: []string{
+			"Origin", "Referer", "Content-Type",
+			"lnurl-auth-k1", "lnurl-auth-sig", "lnurl-auth-key",
+		},
+		ExposedHeaders: []string{"X-Set-Cookie", "Date"},
+		AllowedMethods: []string{"HEAD", "GET", "POST", "PUT", "DELETE"},
+		Debug:          false,
 	})
 
-	return setRequestID(sonyflakeRequestID())(c.Handler(router))
+	return setRequestID(sonyflakeRequestID())(c.Handler(lnurl.AuthMiddleWare(router)))
 }
 
 func setRequestID(nextRequestID func() string) func(http.Handler) http.Handler {

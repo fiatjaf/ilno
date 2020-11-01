@@ -8,4 +8,5 @@ type Config struct {
 	Database string `envconfig:"DATABASE" default:"comments.db"`
 
 	AllowedOrigins []string `envconfig:"ALLOWED_ORIGINS" default:"*"`
+	AdminKey       string   `envconfig:"ADMIN_KEY"`
 }

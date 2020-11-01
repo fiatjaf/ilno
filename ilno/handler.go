@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/fiatjaf/go-lnurl"
 	"github.com/fiatjaf/ilno/extract"
 	"github.com/fiatjaf/ilno/response/json"
 	"github.com/fiatjaf/ilno/tool/bloomfilter"
@@ -35,15 +34,13 @@ func (ilno *ILNO) CreateComment() http.HandlerFunc {
 			return
 		}
 
-		ok, err := lnurl.VerifySignature(comment.K1, comment.Sig, comment.Key)
-		if !ok {
-			json.Unauthorized(requestID, w, err,
-				fmt.Sprintf("user credentials are invalid: %s", err.Error()))
+		comment.URI = mux.Vars(r)["uri"]
+		comment.Key = r.Context().Value("key").(string)
+
+		if ilno.storage.IsBannedUser(r.Context(), comment.Key) {
+			json.Unauthorized(requestID, w, nil, fmt.Sprintf("key is banned"))
 			return
 		}
-
-		comment.URI = mux.Vars(r)["uri"]
-		comment.Key = comment.Key
 
 		var thread Thread
 		thread, err = ilno.storage.GetThreadByURI(r.Context(), comment.URI)
@@ -253,9 +250,6 @@ func (ilno *ILNO) EditComment() http.HandlerFunc {
 	type editInput struct {
 		Text   string  `json:"text"  validate:"required,gte=3,lte=65535"`
 		Author *string `json:"author"  validate:"omitempty,gte=1,lte=15"`
-		Key    string  `json:"key"`
-		Sig    string  `json:"sig"`
-		K1     string  `json:"k1"`
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -286,14 +280,8 @@ func (ilno *ILNO) EditComment() http.HandlerFunc {
 			return
 		}
 
-		if comment.Key != ei.Key {
-			json.Unauthorized(requestID, w, err, fmt.Sprintf("key doesn't match"))
-			return
-		}
-
-		ok, err := lnurl.VerifySignature(ei.K1, ei.Sig, ei.Key)
-		if !ok {
-			json.Unauthorized(requestID, w, err, fmt.Sprintf("signature doesn't match: %s", err.Error()))
+		if comment.Key != r.Context().Value("key").(string) {
+			json.Unauthorized(requestID, w, nil, fmt.Sprintf("key doesn't match"))
 			return
 		}
 
@@ -301,8 +289,8 @@ func (ilno *ILNO) EditComment() http.HandlerFunc {
 		if ei.Author != nil {
 			comment.Author = *ei.Author
 		}
-		comment.Modified = new(float64)
-		*comment.Modified = float64(time.Now().UnixNano()) / float64(1e9)
+		comment.Modified = new(int64)
+		*comment.Modified = time.Now().Unix()
 
 		c, err := ilno.storage.EditComment(r.Context(), comment)
 		if err != nil {
@@ -388,12 +376,6 @@ func (ilno *ILNO) VoteComment() http.HandlerFunc {
 
 // DeleteComment delete a comment
 func (ilno *ILNO) DeleteComment() http.HandlerFunc {
-	type deleteInput struct {
-		Key string `json:"key"`
-		Sig string `json:"sig"`
-		K1  string `json:"k1"`
-	}
-
 	return func(w http.ResponseWriter, r *http.Request) {
 		requestID := RequestIDFromContext(r.Context())
 		cid, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
@@ -412,20 +394,9 @@ func (ilno *ILNO) DeleteComment() http.HandlerFunc {
 			return
 		}
 
-		var ei deleteInput
-		if err := jsonBind(r.Body, &ei); err != nil {
-			json.BadRequest(requestID, w, err, descRequestInvalidParm)
-			return
-		}
-
-		if comment.Key != ei.Key {
+		key := r.Context().Value("key").(string)
+		if comment.Key != key && ilno.config.AdminKey != key {
 			json.Unauthorized(requestID, w, err, fmt.Sprintf("key doesn't match"))
-			return
-		}
-
-		ok, err := lnurl.VerifySignature(ei.K1, ei.Sig, ei.Key)
-		if !ok {
-			json.Unauthorized(requestID, w, err, fmt.Sprintf("signature doesn't match: %s", err.Error()))
 			return
 		}
 
@@ -439,5 +410,68 @@ func (ilno *ILNO) DeleteComment() http.HandlerFunc {
 
 		reply := reply{Comment: comment}
 		json.OK(w, reply)
+	}
+}
+
+// admin things
+func (ilno *ILNO) GetConfig() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("content-type", "application/json")
+		w.Write([]byte(`{"admin": "` + ilno.config.AdminKey + `"}`))
+	}
+}
+
+func (ilno *ILNO) BanKey() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestID := RequestIDFromContext(r.Context())
+		banning := mux.Vars(r)["user"]
+
+		if r.Context().Value("key").(string) != ilno.config.AdminKey {
+			json.Unauthorized(requestID, w, nil, "lnurl-auth credentials invalid")
+			return
+		}
+
+		err := ilno.storage.BanUser(r.Context(), banning)
+		if err != nil {
+			json.ServerError(requestID, w, err, descStorageUnhandledError)
+			return
+		}
+
+		ilno.tools.event.Publish("admin.ban", banning)
+		json.OK(w, true)
+	}
+}
+
+func (ilno *ILNO) UnbanKey() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestID := RequestIDFromContext(r.Context())
+		unbanning := mux.Vars(r)["user"]
+
+		if r.Context().Value("key").(string) != ilno.config.AdminKey {
+			json.Unauthorized(requestID, w, nil, "lnurl-auth credentials invalid")
+			return
+		}
+
+		err := ilno.storage.UnbanUser(r.Context(), unbanning)
+		if err != nil {
+			json.ServerError(requestID, w, err, descStorageUnhandledError)
+			return
+		}
+
+		ilno.tools.event.Publish("admin.unban", unbanning)
+
+		json.OK(w, true)
+	}
+}
+
+func (ilno *ILNO) GetBanned() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestID := RequestIDFromContext(r.Context())
+		banList, err := ilno.storage.ListBannedUsers(r.Context())
+		if err != nil {
+			json.ServerError(requestID, w, err, descStorageUnhandledError)
+			return
+		}
+		json.OK(w, banList)
 	}
 }

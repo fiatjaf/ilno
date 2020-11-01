@@ -7,8 +7,8 @@ var (
 			tid REFERENCES threads(id), 
 			id INTEGER PRIMARY KEY, 
 			parent INTEGER,
-			created FLOAT NOT NULL,
-			modified FLOAT,
+			created INTEGER NOT NULL,
+			modified INTEGER,
 			mode INTEGER,
 			text VARCHAR,
             key VARCHAR,
@@ -21,6 +21,10 @@ var (
 			key VARCHAR PRIMARY KEY, 
 			value VARCHAR
 		);
+        CREATE TABLE IF NOT EXISTS banned_users (
+            key VARCHAR PRIMARY KEY,
+            banned_at INTEGER
+        );
 		CREATE TABLE IF NOT EXISTS threads (
 			id INTEGER PRIMARY KEY,
 			uri VARCHAR(256) UNIQUE,
@@ -36,6 +40,13 @@ var (
 		"preference_get": `SELECT value FROM preferences WHERE key=$1;`,
 		"preference_set": `INSERT INTO preferences (key, value) VALUES ($1, $2);`,
 
+		"ban_list":   `SELECT * FROM banned_users ORDER BY banned_at`,
+		"ban_user":   `INSERT INTO banned_users (key, banned_at) VALUES ($1, $2)`,
+		"unban_user": `DELETE FROM banned_users WHERE key = $1`,
+		"is_banned_user": `SELECT CASE WHEN EXISTS(
+			SELECT * FROM banned_users WHERE key = $1
+		) THEN 1 ELSE 0 END;`,
+
 		"thread_get_by_uri": `SELECT * FROM threads WHERE uri=$1;`,
 		"thread_get_by_id":  `SELECT * FROM threads WHERE id=$1;`,
 		"thread_new":        `INSERT INTO threads (uri, title) VALUES ($1, $2);`,
@@ -45,9 +56,6 @@ var (
 			text, key, author, voters
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`,
 		"comment_get_by_id": `SELECT * FROM comments WHERE id=$1`,
-		"comment_is_previously_approved_author": `SELECT CASE WHEN EXISTS(
-			SELECT * FROM comments WHERE email=$1 AND mode=1 AND created > strftime("%s", DATETIME("now", "-6 month"))
-		) THEN 1 ELSE 0 END;`,
 		"comment_count_reply": `SELECT comments.parent,count(*)
 			FROM comments INNER JOIN threads ON threads.uri=$1 AND comments.tid=threads.id AND ($2 | comments.mode = $2) GROUP BY comments.parent`,
 		"comment_fetch_by_uri": `SELECT comments.* FROM comments INNER JOIN threads ON

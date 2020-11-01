@@ -3,10 +3,10 @@ package notify
 import (
 	"fmt"
 
-	"github.com/kr/pretty"
 	"github.com/fiatjaf/ilno/event"
 	"github.com/fiatjaf/ilno/ilno"
 	"github.com/fiatjaf/ilno/logger"
+	"github.com/kr/pretty"
 )
 
 // Logger log notifications
@@ -19,6 +19,8 @@ func (l *Logger) Register(eb *event.Bus) {
 	eb.Subscribe("comments.edit", l.editComment)
 	eb.Subscribe("comments.delete", l.deleteComment)
 	eb.Subscribe("comments.activate", l.activateComment)
+	eb.Subscribe("admin.ban", l.banUser)
+	eb.Subscribe("admin.unban", l.unbanUser)
 }
 
 func (l *Logger) newThread(mt ilno.Thread) {
@@ -39,4 +41,12 @@ func (l *Logger) deleteComment(id int) {
 
 func (l *Logger) activateComment(id int) {
 	logger.Info("comment %d activated: ", id)
+}
+
+func (l *Logger) banUser(key string) {
+	logger.Info("user %s banned", key)
+}
+
+func (l *Logger) unbanUser(key string) {
+	logger.Info("user %s unbanned", key)
 }

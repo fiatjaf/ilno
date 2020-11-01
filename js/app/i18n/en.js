@@ -12,6 +12,12 @@ export default {
   'no-comments': 'No Comments Yet',
   'atom-feed': 'Atom feed',
 
+  'show-banned': 'Show banned users',
+  'hide-banned': 'Hide',
+  'admin-ban': 'Ban',
+  'admin-unban': 'Unban',
+  'auth-logout': 'Logout',
+
   'comment-reply': 'Reply',
   'comment-edit': 'Edit',
   'comment-save': 'Save',

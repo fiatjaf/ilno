@@ -11,8 +11,8 @@ type Thread struct {
 type Comment struct {
 	ID       int64     `json:"id"`
 	Parent   *int64    `json:"parent"`
-	Created  float64   `json:"created"`
-	Modified *float64  `json:"modified"`
+	Created  int64     `json:"created"`
+	Modified *int64    `json:"modified"`
 	Mode     int       `json:"mode"`
 	Text     string    `json:"text" validate:"required,gte=3,lte=65535"`
 	Key      string    `json:"key" validate:"required"`
@@ -35,4 +35,9 @@ type reply struct {
 	HiddenReplies *int64   `json:"hidden_replies,omitempty"`
 	TotalReplies  *int64   `json:"total_replies,omitempty"`
 	Replies       *[]reply `json:"replies,omitempty"`
+}
+
+type BannedUser struct {
+	Key      string `json:"key"`
+	BannedAt int64  `json:"banned_at"`
 }

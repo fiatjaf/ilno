@@ -109,8 +109,8 @@ type nullComment struct {
 	TID          int64
 	ID           int64
 	Parent       null.Int
-	Created      float64
-	Modified     null.Float
+	Created      int64
+	Modified     null.Int
 	Mode         int
 	Text         string
 	Key          string
@@ -126,7 +126,7 @@ func (nc nullComment) ToComment() ilno.Comment {
 		ID:       nc.ID,
 		Parent:   &nc.Parent.Int64,
 		Created:  nc.Created,
-		Modified: &nc.Modified.Float64,
+		Modified: &nc.Modified.Int64,
 		Mode:     nc.Mode,
 		Text:     nc.Text,
 		Key:      nc.Key,
@@ -154,8 +154,8 @@ func newNullComment(c ilno.Comment, threadID int64) nullComment {
 		TID:      threadID,
 		ID:       c.ID,
 		Parent:   null.IntFromPtr(c.Parent),
-		Created:  float64(time.Now().UnixNano()) / float64(1e9),
-		Modified: null.NewFloat(0, false),
+		Created:  time.Now().Unix(),
+		Modified: null.NewInt(0, false),
 		Mode:     c.Mode,
 		Text:     c.Text,
 		Key:      c.Key,

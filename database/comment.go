@@ -11,19 +11,6 @@ import (
 	"gopkg.in/guregu/null.v4"
 )
 
-// IsApprovedAuthor check if email has approved in 6 month
-func (d *Database) IsApprovedAuthor(ctx context.Context, email string) bool {
-	logger.Debug("email %s", email)
-	ctx, cancel := d.withTimeout(ctx)
-	defer cancel()
-	if email == "" {
-		return false
-	}
-	var flag int64
-	err := d.DB.QueryRowContext(ctx, d.statement["comment_is_previously_approved_author"], email).Scan(&flag)
-	return (err == nil) && (flag == 1)
-}
-
 // NewComment add comment into database
 func (d *Database) NewComment(ctx context.Context, c ilno.Comment, threadID int64) (ilno.Comment, error) {
 	ctx, cancel := d.withTimeout(ctx)

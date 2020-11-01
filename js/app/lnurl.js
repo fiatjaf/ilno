@@ -1,7 +1,7 @@
 import bech32 from 'bech32'
 
 import utils from './utils'
-import api from './api'
+import config from './config'
 
 const letters = '0123456789abcdef'
 
@@ -11,7 +11,7 @@ for (let i = 0; i < 64; i++) {
 }
 const k1 = arr.join('')
 
-const authURL = api.endpoint + '/lnurlauth?tag=login&k1=' + k1
+const authURL = config.endpoint + '/lnurlauth?tag=login&k1=' + k1
 
 var sig
 var key
@@ -27,7 +27,8 @@ export default {
   authURL,
   user,
   encode,
-  listen
+  listen,
+  logout
 }
 
 function encode(url) {
@@ -39,7 +40,9 @@ function encode(url) {
 }
 
 function listen(cb) {
-  var es = new window.EventSource(api.endpoint + '/lnurlauth/stream?k1=' + k1)
+  var es = new window.EventSource(
+    config.endpoint + '/lnurlauth/stream?k1=' + k1
+  )
   es.onerror = e => console.log('lnurl sse error', e.data)
   es.addEventListener('auth', e => {
     let data = JSON.parse(e.data)
@@ -54,4 +57,11 @@ function listen(cb) {
 
     cb(user)
   })
+}
+
+function logout() {
+  utils.localStorage.removeItem('stored-user')
+  user.sig = null
+  user.key = null
+  user.k1 = null
 }

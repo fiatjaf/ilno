@@ -4,7 +4,6 @@ import hashbow from 'hashbow'
 import marked from 'marked'
 
 import domready from './app/lib/ready'
-import globals from './app/globals'
 import i18n from './app/i18n'
 import api from './app/api'
 import lnurl from './app/lnurl'
@@ -16,6 +15,7 @@ const app = Vue.createApp({})
 app.config.globalProperties.f = {
   translate: i18n.translate,
   pluralize: i18n.pluralize,
+  hashbow: hashbow,
   log: console.log
 }
 
@@ -61,11 +61,13 @@ app.component('arrow-up', {
 })
 
 app.component('postbox', {
-  props: ['parent', 'user', 'cancellable', 'autofocus'],
+  props: ['parent', 'cancellable', 'autofocus', 'currentUser', 'adminKey'],
   data() {
     return {
       lnurlauth: lnurl.encode(lnurl.authURL),
-      text: ''
+      text: '',
+      submitting: false,
+      fullKey: false
     }
   },
   template: `
@@ -76,29 +78,45 @@ app.component('postbox', {
         :placeholder="f.translate('postbox-text')"
         v-model="text"
         :autofocus="autofocus"
-    ></textarea>
+        :disabled="submitting"
+      ></textarea>
     </div>
-    <section class="auth-section">
-      <p class="input-wrapper">
-        <input type="text" name="author" :placeholder="f.translate('postbox-author')" v-model="user.name" />
-      </p>
-      <p class="post-action">
-        <button type="submit">{{ f.translate('postbox-submit') }}</button>
-      </p>
+    <section class="actions-section">
+      <div class="input-wrapper">
+        <input
+          type="text"
+          name="author"
+          :placeholder="f.translate('postbox-author')"
+          v-model="currentUser.name"
+          :disabled="submitting"
+        />
+        <span class="spacer">&nbsp;</span>
+        <span
+          class="key"
+          :style="{color: f.hashbow(currentUser.key)}"
+          @dblclick="fullKey = !fullKey"
+        >
+          {{ fullKey ? currentUser.key : currentUser.key.slice(-5) }}
+        </span>
+        <a v-if="!parent" class="logout" @click="logout">
+          {{ f.translate("auth-logout") }}
+        </a>
+      </div>
+      <div class="post-action">
+        <button type="submit" :disabled="submitting">{{ f.translate('postbox-submit') }}</button>
+      </div>
     </section>
   </form>
 </div>
   `,
   methods: {
     postComment(e) {
+      this.submitting = true
       e.preventDefault()
 
       api
         .create({
-          author: this.user.name,
-          sig: this.user.sig,
-          key: this.user.key,
-          k1: this.user.k1,
+          author: this.currentUser.name,
           text: this.text,
           parent: this.parent || null
         })
@@ -106,14 +124,22 @@ app.component('postbox', {
           this.text = ''
           this.$emit('posted', comment)
 
-          utils.localStorage.setItem('stored-user', JSON.stringify(this.user))
+          utils.localStorage.setItem(
+            'stored-user',
+            JSON.stringify(this.currentUser)
+          )
+
+          this.submitting = false
         })
+    },
+    logout() {
+      this.$emit('logout')
     }
   }
 })
 
 app.component('thread', {
-  props: ['user', 'comments', 'id'],
+  props: ['comments', 'id', 'currentUser', 'adminKey'],
   data() {
     return {}
   },
@@ -127,7 +153,8 @@ app.component('thread', {
   v-for="comment in comments"
   v-bind="comment"
   :authorKey="comment.key"
-  :user="user"
+  :currentUser="currentUser"
+  :adminKey="adminKey"
   :key="comment.id"
 />
   `
@@ -135,7 +162,6 @@ app.component('thread', {
 
 app.component('comment', {
   props: [
-    'user',
     'id',
     'parent',
     'created',
@@ -147,7 +173,9 @@ app.component('comment', {
     'likes',
     'dislikes',
     'total_replies',
-    'hidden_replies'
+    'hidden_replies',
+    'currentUser',
+    'adminKey'
   ],
   data() {
     return {
@@ -156,6 +184,7 @@ app.component('comment', {
       deleting: false,
       editing: false,
       replying: false,
+      banning: false,
       editedText: '',
       newText: null,
       newReplies: [],
@@ -186,7 +215,19 @@ app.component('comment', {
       let isRecent =
         new Date().getTime() - parseInt(this.created) * 1000 <
         1000 * 60 * 60 * 6 // 6 hours
-      return this.authorKey === this.user.key && isRecent
+      return this.authorKey === this.currentUser.key && isRecent
+    },
+    canDelete() {
+      return (
+        this.mode !== 4 &&
+        (this.canEdit || this.currentUser.key === this.adminKey)
+      )
+    },
+    canBan() {
+      return (
+        this.currentUser.key === this.adminKey &&
+        this.adminKey !== this.authorKey
+      )
     },
     canReply() {
       // the server is dumb and only allows one level of comment nesting, so we
@@ -196,9 +237,6 @@ app.component('comment', {
     },
     keyLastDigits() {
       return (this.authorKey || '').slice(-5)
-    },
-    keyColor() {
-      return hashbow(this.authorKey)
     }
   },
   template: `
@@ -211,11 +249,20 @@ app.component('comment', {
       </span>
       <span v-else>
         <span class="author name">{{ author }}</span>
+        <span v-if="keyLastDigits.length">
+          <span class="spacer">•</span>
+          <span class="author key" :style="{color: f.hashbow(authorKey)}">{{ keyLastDigits }}</span>
+          <span v-if="banning">
+            <a class="ban" @click="banConfirm">{{ f.translate("comment-confirm") }}</a>
+            <a class="ban" @click="banning = false">{{ f.translate("comment-cancel") }}</a>
+          </span>
+          <span v-else-if="canBan">
+            <a class="ban" @click="banning = true">{{ f.translate("admin-ban") }}</a>
+          </span>
+        </span>
         <span class="spacer">•</span>
-        <span class="author key" :style="{color: keyColor}">{{ keyLastDigits }}</span>
-        <span class="spacer" v-if="keyLastDigits.length">•</span>
       </span>
-      <a class="permalink" href="#ilno-1">
+      <a class="permalink" :href="'#ilno-' + id">
         <time :title="createdReadable" :datetime="createdISO">
           {{ createdHumanized }}
         </time>
@@ -233,33 +280,39 @@ app.component('comment', {
       <a class="upvote" @click="upvote"><arrow-up /></a>
       <span class="spacer">|</span>
       <a class="downvote" @click="downvote"><arrow-down /></a>
-      <span class="spacer">&nbsp;</span>
       <span v-if="deleting">
         <a class="delete" @click="deleteConfirm">{{ f.translate('comment-confirm') }}</a>
-        <span class="spacer">&nbsp;</span>
-        <a class="delete" @click="deleteCancel">{{ f.translate('comment-cancel') }}</a>
+        <a class="delete" @click="deleting = false">{{ f.translate('comment-cancel') }}</a>
       </span>
       <span v-else-if="editing">
-        <a class="delete" @click="deletePrepare">{{ f.translate('comment-delete') }}</a>
-        <span class="spacer">&nbsp;</span>
+        <a class="delete" @click="deleting = true">{{ f.translate('comment-delete') }}</a>
         <a class="edit" @click="editSave">{{ f.translate('comment-save') }}</a>
-        <span class="spacer">&nbsp;</span>
-        <a class="edit" @click="editCancel">{{ f.translate('comment-cancel') }}</a>
+        <a class="edit" @click="editing = false">{{ f.translate('comment-cancel') }}</a>
       </span>
       <span v-else-if="replying">
-        <a class="reply" @click="replyCancel">{{ f.translate('comment-close') }}</a>
+        <a class="reply" @click="replying = false">{{ f.translate('comment-close') }}</a>
       </span>
       <span v-else>
-        <a v-if="canReply" class="reply" @click="reply">{{ f.translate('comment-reply') }}</a>
-        <span class="spacer">&nbsp;</span>
+        <a v-if="canReply" class="reply" @click="replying = true">{{ f.translate('comment-reply') }}</a>
         <a v-if="canEdit" class="edit" @click="editStart">{{ f.translate('comment-edit') }}</a>
-        <span class="spacer">&nbsp;</span>
-        <a v-if="canEdit" class="delete" @click="deletePrepare">{{ f.translate('comment-delete') }}</a>
+        <a v-if="canDelete" class="delete" @click="deleting = true">{{ f.translate('comment-delete') }}</a>
       </span>
     </div>
-    <postbox :user="user" v-if="replying" :parent="id" autofocus @posted="handleNewReply" />
+    <postbox
+      v-if="replying"
+      :parent="id"
+      autofocus
+      @posted="handleNewReply"
+      :currentUser="currentUser"
+      :adminKey="adminKey"
+    />
     <div v-if="actualReplies.length" class="ilno-follow-up">
-      <thread :comments="actualReplies" :id="id" :user="user" />
+    <thread
+      :comments="actualReplies"
+      :id="id"
+      :currentUser="currentUser"
+      :adminKey="adminKey"
+    />
     </div>
   </div>
 </div>
@@ -287,49 +340,28 @@ app.component('comment', {
       this.editing = false
       api
         .modify(this.id, {
-          key: this.user.key,
-          k1: this.user.k1,
-          sig: this.user.sig,
           text: this.editedText
         })
         .then(r => {
           this.newText = r.text
         })
     },
-    editCancel() {
-      this.editing = false
-    },
-    deletePrepare() {
-      this.deleting = true
-    },
-    deleteCancel() {
-      this.deleting = false
-    },
     deleteConfirm() {
       this.deleting = false
-      api
-        .remove(this.id, {
-          key: this.user.key,
-          k1: this.user.k1,
-          sig: this.user.sig
-        })
-        .then(eraseTotally => {
-          if (eraseTotally) {
-            this.fullyErased = true
-          } else {
-            this.newMode = 4
-          }
-        })
+      api.remove(this.id).then(eraseTotally => {
+        if (eraseTotally) {
+          this.fullyErased = true
+        } else {
+          this.newMode = 4
+        }
+      })
     },
-    reply() {
-      this.replying = true
-    },
-    replyCancel() {
-      this.replying = false
+    banConfirm() {
+      api.ban(this.authorKey)
     },
     updateHumanizedDate() {
       this.createdHumanized = utils.ago(
-        globals.offset.localTime(),
+        new Date(),
         new Date(parseInt(this.created, 10) * 1000)
       )
     }
@@ -355,7 +387,9 @@ app.component('root', {
       count: null,
       lnurlauth: lnurl.encode(lnurl.authURL),
       user: lnurl.user,
-      comments: []
+      comments: [],
+      adminKey: null,
+      showingBanList: false
     }
   },
   computed: {
@@ -368,16 +402,34 @@ app.component('root', {
   },
   template: `
 <div>
-  <h4>{{ heading }}</h4>
+  <h4>
+    {{ heading }}
+    <span v-if="user.key === adminKey">
+      <a class="ban" v-if="showingBanList" @click="showingBanList = false">{{ f.translate('hide-banned') }}</a>
+      <a class="ban" v-else @click="showBanList">{{ f.translate('show-banned') }}</a>
+    </span>
+  </h4>
+  <ul v-if="showingBanList">
+    <li v-for="b in showingBanList">
+      <span :style="{color: f.hashbow(b.key)}" title="b.banned_at">{{ b.key.slice(-5) }}</span>
+      <a class="ban" @click="unban(b.key)">{{ f.translate("admin-unban") }}</a>
+    </li>
+  </ul>
   <div v-if="!user.key">
     <qrcode :value="lnurlauth" />
     <p style="white-space: pre-wrap; font-family: monospace; word-break: break-all">
       {{ lnurlauth }}
     </p>
   </div>
-  <postbox v-else :user="user" @posted="handleNewComment" />
+  <postbox
+    v-else
+    @posted="handleNewComment"
+    @logout="logout"
+    :currentUser="user"
+    :adminKey="adminKey"
+  />
   <div id="ilno-root">
-    <thread :comments="comments" :id="0" :user="user" />
+    <thread :comments="comments" :id="0" :currentUser="user" :adminKey="adminKey" />
   </div>
 </div>
   `,
@@ -409,11 +461,29 @@ app.component('root', {
           this.user = {...user}
         })
       }
+    },
+    logout() {
+      lnurl.logout()
+      this.user = {...lnurl.user}
+      this.authListen()
+    },
+    showBanList() {
+      api.banned().then(banned => {
+        this.showingBanList = banned
+      })
+    },
+    unban(key) {
+      api.unban(key).then(this.showBanList)
     }
   },
   mounted() {
     this.authListen()
     this.fetchComments()
+
+    // get admin key to check if we are it
+    api.getConfig().then(config => {
+      this.adminKey = config.admin
+    })
   }
 })
 

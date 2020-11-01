@@ -1,94 +1,35 @@
-import Q from './lib/promise'
-import globals from './globals'
+import lnurl from './lnurl'
+import config from './config'
 
-var salt = 'Eech7co8Ohloopo9Ol6baimi'
-var location = function () {
+const endpoint = config.endpoint
+const salt = 'Eech7co8Ohloopo9Ol6baimi'
+function location() {
   return window.location.pathname
 }
 
-var script
-var endpoint
-var js = document.getElementsByTagName('script')
-
-// prefer `data-ilno="//host/api/endpoint"` if provided
-for (var i = 0; i < js.length; i++) {
-  if (js[i].hasAttribute('data-ilno')) {
-    endpoint = js[i].getAttribute('data-ilno')
-    break
-  }
-}
-
-// if no async-script is embedded, use the last script tag of `js`
-if (!endpoint) {
-  for (i = 0; i < js.length; i++) {
-    if (js[i].getAttribute('async') || js[i].getAttribute('defer')) {
-      throw Error(
-        "Isso's automatic configuration detection failed, please " +
-          'refer to https://github.com/posativ/ilno#client-configuration ' +
-          'and add a custom `data-ilno` attribute.'
-      )
-    }
-  }
-
-  script = js[js.length - 1]
-  endpoint = script.src.substring(
-    0,
-    script.src.length - '/js/embed.min.js'.length
-  )
-}
-
-//  strip trailing slash
-if (endpoint[endpoint.length - 1] === '/') {
-  endpoint = endpoint.substring(0, endpoint.length - 1)
-}
-
-var curl = function (method, url, data, resolve, reject) {
-  var xhr = new window.XMLHttpRequest()
-
-  function onload() {
-    var date = xhr.getResponseHeader('Date')
-    if (date !== null) {
-      globals.offset.update(new Date(date))
-    }
-
-    var cookie = xhr.getResponseHeader('X-Set-Cookie')
-    if (cookie && cookie.match(/^ilno-/)) {
-      document.cookie = cookie
-    }
-
-    if (xhr.status >= 500) {
-      if (reject) {
-        reject(xhr.body)
+function curl(method, url, data) {
+  return window
+    .fetch(url, {
+      method,
+      body: method === 'GET' ? undefined : JSON.stringify(data),
+      headers: {
+        'lnurl-auth-k1': lnurl.user.k1,
+        'lnurl-auth-key': lnurl.user.key,
+        'lnurl-auth-sig': lnurl.user.sig
       }
-    } else {
-      resolve({status: xhr.status, body: xhr.responseText})
-    }
-  }
-
-  try {
-    xhr.open(method, url, true)
-    xhr.setRequestHeader('Content-Type', 'application/json')
-
-    xhr.onreadystatechange = function () {
-      if (xhr.readyState === 4) {
-        onload()
-      }
-    }
-  } catch (exception) {
-    ;(reject || console.log)(exception.message)
-  }
-
-  xhr.send(data)
+    })
+    .then(r => {
+      if (r.ok) return r.json()
+      return r.text().then(text => {
+        throw new Error(text)
+      })
+    })
 }
 
 var qs = function (params) {
   var rv = ''
-  for (var key in params) {
-    if (
-      params.hasOwnProperty(key) &&
-      params[key] !== null &&
-      typeof params[key] !== 'undefined'
-    ) {
+  for (let key in params) {
+    if (params[key]) {
       rv += key + '=' + encodeURIComponent(params[key]) + '&'
     }
   }
@@ -102,66 +43,17 @@ var create = function (data) {
   let title = rootElement.dataset.ilnoTitle
   data.title = title
 
-  var deferred = Q.defer()
-  curl(
-    'POST',
-    endpoint + '/new?' + qs({uri: tid || location()}),
-    JSON.stringify(data),
-    function (rv) {
-      if (rv.status === 201 || rv.status === 202) {
-        deferred.resolve(JSON.parse(rv.body))
-      } else {
-        deferred.reject(rv.body)
-      }
-    }
-  )
-  return deferred.promise
+  return curl('POST', endpoint + '/new?' + qs({uri: tid || location()}), data)
 }
 
 var modify = function (id, data) {
-  var deferred = Q.defer()
-  curl('PUT', endpoint + '/id/' + id, JSON.stringify(data), function (rv) {
-    if (rv.status === 403) {
-      deferred.reject('Not authorized to modify this comment!')
-    } else if (rv.status === 200) {
-      deferred.resolve(JSON.parse(rv.body))
-    } else {
-      deferred.reject(rv.body)
-    }
-  })
-  return deferred.promise
+  return curl('PUT', endpoint + '/id/' + id, data)
 }
 
-var remove = function (id, data) {
-  var deferred = Q.defer()
-  curl(
-    'POST',
-    endpoint + '/id/' + id + '/delete',
-    JSON.stringify(data),
-    function (rv) {
-      if (rv.status === 403) {
-        deferred.reject('Not authorized to delete this comment!')
-      } else if (rv.status === 200) {
-        deferred.resolve(JSON.parse(rv.body).id === 0)
-      } else {
-        deferred.reject(rv.body)
-      }
-    }
+var remove = function (id) {
+  return curl('DELETE', endpoint + '/id/' + id, null).then(
+    body => body.id === 0
   )
-  return deferred.promise
-}
-
-var view = function (id, plain) {
-  var deferred = Q.defer()
-  curl(
-    'GET',
-    endpoint + '/id/' + id + '?' + qs({plain: plain}),
-    null,
-    function (rv) {
-      deferred.resolve(JSON.parse(rv.body))
-    }
-  )
-  return deferred.promise
 }
 
 var fetch = function (parent, lastcreated) {
@@ -174,50 +66,37 @@ var fetch = function (parent, lastcreated) {
 
   var query_dict = {uri: tid || location(), after: lastcreated, parent: parent}
 
-  var deferred = Q.defer()
-  curl('GET', endpoint + '/?' + qs(query_dict), null, function (rv) {
-    if (rv.status === 200) {
-      deferred.resolve(JSON.parse(rv.body))
-    } else if (rv.status === 404) {
-      deferred.resolve({total_replies: 0})
-    } else {
-      deferred.reject(rv.body)
-    }
-  })
-
-  return deferred.promise
+  return curl('GET', endpoint + '/?' + qs(query_dict), null).catch(() => ({
+    total_replies: 0
+  }))
 }
 
 var count = function (urls) {
-  var deferred = Q.defer()
-  curl('POST', endpoint + '/count', JSON.stringify(urls), function (rv) {
-    if (rv.status === 200) {
-      deferred.resolve(JSON.parse(rv.body))
-    } else {
-      deferred.reject(rv.body)
-    }
-  })
-  return deferred.promise
+  return curl('POST', endpoint + '/count', urls)
 }
 
 var like = function (id) {
-  var deferred = Q.defer()
-  curl('POST', endpoint + '/id/' + id + '/like', null, function (rv) {
-    deferred.resolve(JSON.parse(rv.body))
-  })
-  return deferred.promise
+  return curl('POST', endpoint + '/id/' + id + '/like', null)
 }
 
 var dislike = function (id) {
-  var deferred = Q.defer()
-  curl('POST', endpoint + '/id/' + id + '/dislike', null, function (rv) {
-    deferred.resolve(JSON.parse(rv.body))
-  })
-  return deferred.promise
+  return curl('POST', endpoint + '/id/' + id + '/dislike', null)
 }
 
-var feed = function (tid) {
-  return endpoint + '/feed?' + qs({uri: tid || location()})
+var getConfig = function () {
+  return curl('GET', endpoint + '/config', null)
+}
+
+var banned = function () {
+  return curl('GET', endpoint + '/banned', null).then(r => r || [])
+}
+
+var ban = function (key) {
+  return curl('POST', endpoint + '/ban/' + key, null)
+}
+
+var unban = function (key) {
+  return curl('POST', endpoint + '/unban/' + key, null)
 }
 
 export default {
@@ -227,10 +106,13 @@ export default {
   create: create,
   modify: modify,
   remove: remove,
-  view: view,
   fetch: fetch,
   count: count,
   like: like,
   dislike: dislike,
-  feed: feed
+
+  banned,
+  ban,
+  unban,
+  getConfig
 }

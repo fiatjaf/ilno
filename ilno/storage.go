@@ -39,6 +39,7 @@ type Storage interface {
 	ThreadStorage
 	CommentStorage
 	PreferenceStorage
+	AdminStorage
 }
 
 // ThreadStorage handles all operations related to Thread and the database.
@@ -50,7 +51,6 @@ type ThreadStorage interface {
 
 // CommentStorage handles all operations related to Comment and the database.
 type CommentStorage interface {
-	IsApprovedAuthor(ctx context.Context, email string) bool
 	NewComment(ctx context.Context, c Comment, threadID int64) (Comment, error)
 	GetComment(ctx context.Context, id int64) (Comment, error)
 	// CountReply return parent-count map, 0 mean null `parent`
@@ -60,6 +60,13 @@ type CommentStorage interface {
 	EditComment(ctx context.Context, c Comment) (Comment, error)
 	DeleteComment(ctx context.Context, cid int64) (Comment, error)
 	VoteComment(ctx context.Context, c Comment, up bool) error
+}
+
+type AdminStorage interface {
+	BanUser(context.Context, string) error
+	UnbanUser(context.Context, string) error
+	ListBannedUsers(context.Context) ([]BannedUser, error)
+	IsBannedUser(context.Context, string) bool
 }
 
 // PreferenceStorage handles all operations related to Preference and the database.

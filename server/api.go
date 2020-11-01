@@ -20,13 +20,14 @@ func registerRoute(router *mux.Router, ilno *ilno.ILNO) {
 	// single comment
 	router.HandleFunc("/id/{id:[0-9]+}", ilno.ViewComment()).Methods("GET").Name("view")
 	router.HandleFunc("/id/{id:[0-9]+}", ilno.EditComment()).Methods("PUT").Name("edit")
-	router.HandleFunc("/id/{id:[0-9]+}/delete", ilno.DeleteComment()).Methods("POST").Name("delete")
+	router.HandleFunc("/id/{id:[0-9]+}", ilno.DeleteComment()).Methods("DELETE").Name("delete")
 	router.HandleFunc("/id/{id:[0-9]+}/{vote:(?:like|dislike)}", ilno.VoteComment()).Methods("POST").Name("vote")
 
-	router.HandleFunc("/id/{id:[0-9]+}/{action:(?:edit|activate|delete)}/{key}", wip).
-		Methods("GET").Name("moderate_get")
-	router.HandleFunc("/id/{id:[0-9]+}/{action:(?:edit|activate|delete)}>/{key}", wip).
-		Methods("POST").Name("moderate_post")
+	// admin
+	router.HandleFunc("/config", ilno.GetConfig()).Methods("GET").Name("config")
+	router.HandleFunc("/banned", ilno.GetBanned()).Methods("GET").Name("banned")
+	router.HandleFunc("/ban/{user}", ilno.BanKey()).Methods("POST").Name("ban")
+	router.HandleFunc("/unban/{user}", ilno.UnbanKey()).Methods("POST").Name("unban")
 
 	// ping
 	router.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {

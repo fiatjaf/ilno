@@ -1,14 +1,15 @@
 package lnurl
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/fiatjaf/go-lnurl"
+	"github.com/fiatjaf/ilno/logger"
 	cmap "github.com/orcaman/concurrent-map"
 	"gopkg.in/antage/eventsource.v1"
-	"github.com/fiatjaf/ilno/logger"
 )
 
 var userstreams = cmap.New()
@@ -80,4 +81,20 @@ func AuthStream(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	es.ServeHTTP(w, r)
+}
+
+func AuthMiddleWare(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if ok, _ := lnurl.VerifySignature(
+			r.Header.Get("lnurl-auth-k1"),
+			r.Header.Get("lnurl-auth-sig"),
+			r.Header.Get("lnurl-auth-key"),
+		); ok {
+			r = r.WithContext(
+				context.WithValue(r.Context(), "key", r.Header.Get("lnurl-auth-key")),
+			)
+		}
+
+		h.ServeHTTP(w, r)
+	})
 }
