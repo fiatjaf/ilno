@@ -17,6 +17,7 @@ export default {
   'admin-ban': 'Ban',
   'admin-unban': 'Unban',
   'auth-logout': 'Logout',
+  'auth-login': 'Login with lnurl-auth to comment',
 
   'comment-reply': 'Reply',
   'comment-edit': 'Edit',

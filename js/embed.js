@@ -233,7 +233,7 @@ app.component('comment', {
       // the server is dumb and only allows one level of comment nesting, so we
       // rather not show the reply button for the third level since comments will
       // be migrated to the second level anyway
-      return !this.parent
+      return !this.parent && this.currentUser.key
     },
     keyLastDigits() {
       return (this.authorKey || '').slice(-5)
@@ -415,9 +415,12 @@ app.component('root', {
       <a class="ban" @click="unban(b.key)">{{ f.translate("admin-unban") }}</a>
     </li>
   </ul>
-  <div v-if="!user.key">
-    <qrcode :value="lnurlauth" />
-    <p style="white-space: pre-wrap; font-family: monospace; word-break: break-all">
+  <div class="lnurl" v-if="!user.key">
+    <p>{{ f.translate("auth-login") }}</p>
+    <a :href="'lightning:' + lnurlauth">
+      <qrcode :value="lnurlauth" />
+    </a>
+    <p>
       {{ lnurlauth }}
     </p>
   </div>

@@ -9,10 +9,10 @@ export default {
     text-decoration: none;
     cursor: pointer;
 }
-
 #ilno-thread {
+    max-width: 68em;
     padding: 0;
-    margin: 0;
+    margin: 0 auto;
 }
 #ilno-thread > h4 {
     color: #555;
@@ -24,9 +24,12 @@ export default {
     max-width: 100%;
     outline: 0;
 }
-
+#ilno-thread .lnurl {
+    white-space: pre-wrap;
+    font-family: monospace;
+    word-break: break-all;
+}
 #ilno-root .ilno-comment {
-    max-width: 68em;
     padding-top: 0.95em;
     margin: 0.95em auto;
 }
@@ -127,7 +130,6 @@ export default {
     margin-top: 0.8em;
 }
 .ilno-postbox {
-    max-width: 68em;
     margin: 0 auto 2em;
     clear: right;
 }
