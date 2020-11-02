@@ -42,3 +42,4 @@ ilno-server
 comments.db
 bindata.go
 *.env
+dist
