@@ -24,10 +24,13 @@ export default {
     max-width: 100%;
     outline: 0;
 }
-#ilno-thread .lnurl {
+#ilno-thread .lnurl {}
+#ilno-thread .lnurl code {
+    display: block;
     white-space: pre-wrap;
     font-family: monospace;
     word-break: break-all;
+    max-width: 270px;
 }
 #ilno-root .ilno-comment {
     padding-top: 0.95em;

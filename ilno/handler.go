@@ -422,7 +422,7 @@ func (ilno *ILNO) DeleteComment() http.HandlerFunc {
 func (ilno *ILNO) GetConfig() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("content-type", "application/json")
-		w.Write([]byte(`{"admin": "` + ilno.config.AdminKey + `"}`))
+		w.Write([]byte(`{"admin": "` + ilno.config.AdminKey + `", "seed_auth": "` + ilno.config.SeedAuth + `"}`))
 	}
 }
 

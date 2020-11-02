@@ -418,10 +418,13 @@ app.component('root', {
   <div class="lnurl" v-if="!user.key">
     <p>{{ f.translate("auth-login") }}</p>
     <a :href="'lightning:' + lnurlauth">
-      <qrcode :value="lnurlauth" />
+      <qrcode :value="lnurlauth.toUpperCase()" />
     </a>
-    <p>
+    <code>
       {{ lnurlauth }}
+    </code>
+    <p v-if="seedAuth && seedAuth.length">
+      Or use <a target="_blank" :href="seedAuth + '/#/lnurl/' + lnurlauth">username and password</a>.
     </p>
   </div>
   <postbox
@@ -486,6 +489,7 @@ app.component('root', {
     // get admin key to check if we are it
     api.getConfig().then(config => {
       this.adminKey = config.admin
+      this.seedAuth = config.seed_auth
     })
   }
 })
