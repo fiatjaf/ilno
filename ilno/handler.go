@@ -42,6 +42,11 @@ func (ilno *ILNO) CreateComment() http.HandlerFunc {
 			return
 		}
 
+		if comment.Key == "" {
+			json.Unauthorized(requestID, w, nil, fmt.Sprintf("must login to comment"))
+			return
+		}
+
 		var thread Thread
 		thread, err = ilno.storage.GetThreadByURI(r.Context(), comment.URI)
 		if err != nil {
